@@ -1,50 +1,88 @@
-# Welcome to your Expo app 👋
+# SoundSight Frontend (React Native + Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+React Native + Expo 기반으로 개발하며, **Android 우선**으로 진행합니다.
 
-## Get started
+> **현재 상태: 프로젝트 초기 세팅 단계**
+> - Expo 프로젝트 생성 완료
+> - 기본 실행 확인 완료
+> - 추후 API 명세서에 따라 화면 구조 정리 예정
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 목차
 
-2. Start the app
+1. [문서 목적](#1-문서-목적)
+2. [사전 준비](#2-사전-준비)
+3. [프로젝트 세팅](#3-프로젝트-세팅)
+4. [앱 실행하기](#4-앱-실행하기)
+5. [실기기에서 앱 열기](#5-실기기에서-앱-열기)
+6. [에뮬레이터에서 앱 열기](#6-에뮬레이터에서-앱-열기)
 
-   ```bash
-   npx expo start
-   ```
+---
 
-In the output, you'll find options to open the app in a
+## 1. 문서 목적
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+아래 순서대로 따라하면 **앱을 로컬에서 실행**할 수 있도록 안내하기 위해 작성했습니다.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+## 2. 사전 준비
 
-When you're ready, run:
+아래 프로그램이 설치되어 있어야 합니다.
 
+| 항목 | 권장 버전 / 비고 |
+|------|----------------|
+| Node.js | **20 LTS 권장** (v20.15.1에서 실행 확인) |
+| VS Code | 권장 코드 에디터 |
+| Expo Go | 휴대폰에 설치 (Android / iOS 모두 가능) |
+
+---
+
+## 3. 프로젝트 세팅
+
+### 3-1. 저장소 클론 후 프론트엔드 폴더로 이동
+
+프론트엔드 앱은 `frontend/` 폴더 안에 있습니다.
 ```bash
-npm run reset-project
+cd frontend
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 3-2. 패키지 설치 (최초 1회)
+```bash
+npm install
+```
 
-## Learn more
+> 설치 완료 후 `node_modules/` 폴더가 생성됩니다.
 
-To learn more about developing your project with Expo, look at the following resources:
+---
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 4. 앱 실행하기
 
-## Join the community
+Expo 개발 서버를 시작합니다.
+```bash
+npx expo start
+```
 
-Join our community of developers creating universal apps.
+실행하면 터미널에 QR 코드와 실행 옵션이 표시됩니다.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+## 5. 실기기에서 앱 열기
+
+1. 폰에 **Expo Go** 앱 설치
+2. PC와 폰을 **같은 Wi-Fi**에 연결
+3. `frontend/` 폴더에서 `npx expo start` 실행
+4. 터미널에 표시된 **QR 코드**를 Expo Go 앱으로 스캔
+5. 앱이 열리면 완료 
+
+---
+
+## 6. 에뮬레이터에서 앱 열기
+
+> Android Studio 에뮬레이터를 사용하는 경우
+
+1. **Android Studio** 실행
+2. **Emulator(가상 기기)** 실행
+3. `frontend/` 폴더에서 `npx expo start` 실행
+4. Expo 터미널에서 Android 실행
+   - 버전에 따라 **`a` 키**로 바로 실행 가능
