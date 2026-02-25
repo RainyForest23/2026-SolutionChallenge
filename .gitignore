@@ -12,6 +12,8 @@ Thumbs.db
 
 # Python (Backend / AI)
 venv/
+.venv/
+backend/.venv/
 __pycache__/
 *.pyc
 *.pyo
