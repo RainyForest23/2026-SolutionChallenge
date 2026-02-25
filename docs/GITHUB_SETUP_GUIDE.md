@@ -1,6 +1,6 @@
 # GitHub 레포 세팅 가이드
 
-이 문서는 PM(신우림)이 GitHub 레포를 처음 생성하고 설정하는 단계별 가이드입니다.
+이 문서는 신우림이 GitHub 레포를 처음 생성하고 설정하는 단계별 가이드입니다.
 
 ---
 
@@ -71,32 +71,7 @@ git checkout -b dev
 git push -u origin dev
 ```
 
-## 4단계: 브랜치 보호 규칙 설정
-
-GitHub 웹에서 Settings → Branches → Add branch ruleset:
-
-### main 브랜치 보호
-- Branch name pattern: `main`
-- **Require a pull request before merging**: 체크
-  - Required approvals: `1`
-- **Require status checks to pass before merging**: 체크 (CI 추가 후)
-- **Do not allow bypassing the above settings**: 체크
-
-### dev 브랜치 보호
-- Branch name pattern: `dev`
-- **Require a pull request before merging**: 체크
-  - Required approvals: `1`
-
-## 5단계: Collaborator 초대
-
-Settings → Collaborators → `Add people`:
-- 정희진 GitHub ID 추가
-- 진웨이얀 GitHub ID 추가
-- 민지인 GitHub ID 추가
-
-Role: **Write** (push 권한)
-
-## 6단계: Labels 생성
+## 4단계: Labels 생성
 
 Issues → Labels에서 아래 라벨 생성:
 
@@ -113,7 +88,7 @@ Issues → Labels에서 아래 라벨 생성:
 | `bug` | #D73A4A (빨강) | 버그 |
 | `urgent` | #B60205 (진빨강) | 긴급 |
 
-## 7단계: 팀원 온보딩 안내
+## 5단계: 팀원 온보딩 안내
 
 팀원들에게 아래 메시지를 전달합니다:
 
@@ -122,8 +97,8 @@ Issues → Labels에서 아래 라벨 생성:
 
 1. GitHub 초대 수락해 주세요 (메일 확인)
 2. 레포 클론:
-   git clone https://github.com/{username}/soundsight.git
-   cd soundsight
+   git clone https://github.com/RainyForest23/2026-SolutionChallenge.git
+   cd 2026-SolutionChallenge
    git checkout dev
 3. 환경 변수 설정:
    cp .env.example .env
@@ -142,8 +117,5 @@ Issues → Labels에서 아래 라벨 생성:
 - [ ] 레포 생성 완료
 - [ ] 초기 파일 push 완료 (README, CONTRIBUTING, .gitignore, .env.example, 디렉토리 구조)
 - [ ] dev 브랜치 생성 완료
-- [ ] main 브랜치 보호 규칙 설정
-- [ ] dev 브랜치 보호 규칙 설정
-- [ ] Collaborator 3명 초대 완료
 - [ ] Labels 생성 완료
 - [ ] 팀원 온보딩 메시지 전달 완료
