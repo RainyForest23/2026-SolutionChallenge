@@ -5,6 +5,7 @@ from django.core.cache import cache
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status as drf_status
+from firestore_service.auth import authenticate_request
 import logging
 
 from .serializers import (
@@ -154,3 +155,13 @@ def result(request):
         }
     )
     return Response(resp_ser.data, status=drf_status.HTTP_200_OK)
+
+# Auth 연동 확인 엔드포인트
+@api_view(["GET"])
+def me(request):
+    uid, decoded = authenticate_request(request)
+
+    return Response({
+        "uid": uid,
+        "email": decoded.get("email"),
+    })

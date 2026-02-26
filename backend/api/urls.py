@@ -5,4 +5,5 @@ urlpatterns = [
     path("analyze", views.analyze, name="analyze"),
     path("status", views.status, name="status"),
     path("result", views.result, name="result"),
+    path("me", views.me, name="me"),
 ]
