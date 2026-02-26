@@ -12,6 +12,6 @@ GET http://127.0.0.1:8000/api/status?job_id=your_job_id_here
 ### 결과 조회
 GET http://127.0.0.1:8000/api/result?job_id=your_job_id_here
 
-## Me (Firebase Auth test)
+### Me (Firebase Auth test)
 GET http://127.0.0.1:8000/api/me
 Authorization: Bearer firebase_id_token
