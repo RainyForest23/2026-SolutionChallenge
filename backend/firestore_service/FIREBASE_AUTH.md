@@ -1,0 +1,91 @@
+# Firebase Authentication 연동 가이드
+
+## 개요
+
+SoundSight 백엔드는 Firebase Authentication의 **ID Token 기반 인증**을 사용합니다.
+
+클라이언트(RN 앱)는 로그인 후 발급받은 ID Token을
+Authorization: Bearer <token> 형태로 요청 헤더에 포함해야 합니다.
+
+---
+
+## 인증 흐름
+
+```
+RN 로그인
+  ↓
+Firebase ID Token 발급
+  ↓
+HTTP 요청
+Authorization: Bearer <ID_TOKEN>
+  ↓
+Django (verify_id_token)
+  ↓
+uid 추출
+```
+
+## 로컬 개발 환경 설정
+
+### 1️⃣ Firebase 서비스 계정 키 발급
+
+1. Firebase 콘솔 접속
+2. soundsight-dev 프로젝트 선택
+3. 좌측 상단 톱니바퀴 → 서비스 계정 클릭
+4. Firebase Admin SDK → Python → 비공개 키 생성
+5. backend/secret/ 폴더에 json 키 보관
+
+### ⚠️ 서비스 계정 키는 Git에 절대 커밋하지 않습니다.
+
+## 모듈 구조
+
+```
+firestore_service/
+ ├── firebase_app.py   # Firebase Admin SDK 초기화
+ └── auth.py           # ID Token 검증 helper
+```
+
+## 백엔드 내 사용 방법
+
+### 1️⃣ 요청 헤더
+```
+Authorization: Bearer <ID_TOKEN>
+```
+
+### 2️⃣ View 내부에서 다음 helper 사용
+
+```python
+from firestore_service.auth import authenticate_uid
+
+@api_view(["GET"])
+def some_view(request):
+    uid = authenticate_uid(request)
+    ...
+```
+
+## 테스트 엔드포인트
+
+### GET /api/me
+
+인증 연동 확인용 API
+
+**Request**
+
+```
+GET /api/me
+Authorization: Bearer <ID_TOKEN>
+```
+
+**Response**
+
+```
+{
+  "uid": "CWYS3TAeUycTUnPDLVTWIcVyqlK2",
+  "email": "aaa@gmail.com"
+}
+```
+
+## 현재 상태
+
+- Firebase Admin SDK 연동 완료
+- ID Token 검증 성공
+- /api/me 테스트 통과
