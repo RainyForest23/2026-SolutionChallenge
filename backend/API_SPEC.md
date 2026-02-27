@@ -2,7 +2,7 @@
 
 ## 개요
 
-- **Base URL**: `http://127.0.0.1:8000`
+- **Base URL**: `http://127.0.0.1:8080`
 - **Protocol**: HTTP/REST
 - **Response Format**: JSON
 - **Authentication**: 현재 없음 (Phase 1)
@@ -100,7 +100,7 @@ Location: /api/status?job_id={job_id}
 #### 예시
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/analyze \
+curl -X POST http://127.0.0.1:8080/api/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -174,7 +174,7 @@ curl -X POST http://127.0.0.1:8000/api/analyze \
 #### 예시
 
 ```bash
-curl -X GET "http://127.0.0.1:8000/api/status?job_id=a1b2c3d4e5f6g7h8"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=a1b2c3d4e5f6g7h8"
 ```
 
 #### 처리 중 응답
@@ -270,7 +270,7 @@ curl -X GET "http://127.0.0.1:8000/api/status?job_id=a1b2c3d4e5f6g7h8"
 #### 예시
 
 ```bash
-curl -X GET "http://127.0.0.1:8000/api/result?job_id=a1b2c3d4e5f6g7h8"
+curl -X GET "http://127.0.0.1:8080/api/result?job_id=a1b2c3d4e5f6g7h8"
 ```
 
 #### 에러 응답
@@ -298,7 +298,7 @@ curl -X GET "http://127.0.0.1:8000/api/result?job_id=a1b2c3d4e5f6g7h8"
 
 **Step 1: 작업 시작**
 ```bash
-curl -X POST http://127.0.0.1:8000/api/analyze \
+curl -X POST http://127.0.0.1:8080/api/analyze \
   -H "Content-Type: application/json" \
   -d '{"youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
@@ -314,21 +314,21 @@ curl -X POST http://127.0.0.1:8000/api/analyze \
 **Step 2: 상태 폴링 (1초 간격)**
 ```bash
 # 1번째 시도
-curl -X GET "http://127.0.0.1:8000/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
 # → { "status": "queued" }
 
 # 2번째 시도 (5초 뒤)
-curl -X GET "http://127.0.0.1:8000/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
 # → { "status": "processing" }
 
 # 3번째 시도 (10초 뒤)
-curl -X GET "http://127.0.0.1:8000/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
 # → { "status": "done" }
 ```
 
 **Step 3: 결과 조회**
 ```bash
-curl -X GET "http://127.0.0.1:8000/api/result?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123def456"
 ```
 
 응답:
@@ -361,7 +361,7 @@ python manage.py runserver
 정상 실행 시 다음과 같은 메시지가 표시됩니다:
 
 ```
-Starting development server at http://127.0.0.1:8000/
+Starting development server at http://127.0.0.1:8080/
 ```
 
 ---
@@ -377,7 +377,7 @@ Django REST Framework는 브라우저에서 직접 API 테스트가 가능합니
 1. 브라우저에서 접속:
 
 ```
-http://127.0.0.1:8000/api/analyze
+http://127.0.0.1:8080/api/analyze
 ```
 
 2. 페이지 하단의 **Content 입력창**에 아래 JSON 입력:
@@ -406,7 +406,7 @@ http://127.0.0.1:8000/api/analyze
 브라우저 주소창에 입력:
 
 ```
-http://127.0.0.1:8000/api/status?job_id=abc123def456
+http://127.0.0.1:8080/api/status?job_id=abc123def456
 ```
 
 응답 예시:
@@ -426,7 +426,7 @@ http://127.0.0.1:8000/api/status?job_id=abc123def456
 브라우저 주소창에 입력:
 
 ```
-http://127.0.0.1:8000/api/result?job_id=abc123def456
+http://127.0.0.1:8080/api/result?job_id=abc123def456
 ```
 
 처리 중일 경우:
@@ -446,7 +446,7 @@ http://127.0.0.1:8000/api/result?job_id=abc123def456
 ### 작업 시작
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/analyze \
+curl -X POST http://127.0.0.1:8080/api/analyze \
   -H "Content-Type: application/json" \
   -d '{"youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
@@ -454,13 +454,13 @@ curl -X POST http://127.0.0.1:8000/api/analyze \
 ### 상태 조회
 
 ```bash
-curl -X GET "http://127.0.0.1:8000/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
 ```
 
 ### 결과 조회
 
 ```bash
-curl -X GET "http://127.0.0.1:8000/api/result?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123def456"
 ```
 
 ---
