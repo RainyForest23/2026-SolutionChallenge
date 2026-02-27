@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   backend:
     build:
@@ -11,7 +9,7 @@ services:
       - ./backend:/app
       - ./ai-pipeline:/app/ai-pipeline
     env_file:
-      - .env
+      - ./backend/.env
     depends_on:
       - redis
 
@@ -30,7 +28,7 @@ services:
       - ./backend:/app
       - ./ai-pipeline:/app/ai-pipeline
     env_file:
-      - .env
+      - ./backend/.env
     depends_on:
       - redis
       - backend
