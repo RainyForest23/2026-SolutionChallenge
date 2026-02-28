@@ -47,7 +47,7 @@ docker compose down -v
 ```yaml
 services:
   backend:
-    command: python manage.py runserver 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:8080
 ```
 
 이 설정을 통해:
@@ -64,7 +64,7 @@ services:
 ### Backend API
 
 ```
-http://localhost:8000
+http://localhost:8080
 ```
 
 ### Redis
@@ -80,7 +80,7 @@ localhost:6379
 
 * `entrypoint.sh` 실행
 * 마이그레이션 자동 수행
-* Django 서버 시작
+* Django 서버 시작 (포트 8080)
 
 ### Celery 컨테이너
 

@@ -118,7 +118,7 @@ def status(request):
     resp_ser = StatusResponseSerializer(
         {
             "job_id": job_id,
-            "status": job.get("status", "unknown"),  # 상태: queued, processing, done, failed
+            "status": job.get("status", "unknown"),  # 상태: queued, processing, done, failed, downloading, uploading
             "error": job.get("error"),  # 오류 메시지 (있으면)
         }
     )
