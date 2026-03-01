@@ -54,13 +54,22 @@ def _get_job(job_id: str) -> Optional[Dict[str, Any]]:
     # 캐시에서 조회
     return cache.get(f"job:{job_id}")
 
+def _forbidden() -> Response:
+    # don’t leak whether the job exists for other users.
+    return Response({"error": "Forbidden"}, status=drf_status.HTTP_403_FORBIDDEN)
+
 @api_view(["POST"])
 def analyze(request):
     """
     POST /api/analyze
     Starts a new emotion analysis job (queued). Returns 202 Accepted with Location header.
+    Requires Firebase auth:
+    Authorization: Bearer <ID_TOKEN>
     Body: { "youtube_url": "...", "upload_id": "...", "callback_url": "optional" }
     """
+    # Require auth + capture owner uid
+    uid, _decoded = authenticate_request(request)
+
     # 요청 데이터 검증
     serializer = AnalyzeRequestSerializer(data=request.data)
     if not serializer.is_valid():
@@ -70,6 +79,7 @@ def analyze(request):
     job_id = uuid.uuid4().hex
     payload = {
         "job_id": job_id,
+        "uid": uid,  # owner of this job
         "status": "queued",  # 초기 상태: 대기 중
         "input": serializer.validated_data,
         "created_at": _now_iso(),
@@ -103,7 +113,12 @@ def status(request):
     """
     GET /api/status?job_id=...
     Returns current processing status.
+        Requires Firebase auth:
+      Authorization: Bearer <ID_TOKEN>
     """
+
+    uid, _decoded = authenticate_request(request)
+
     # 쿼리 파라미터에서 작업 ID 추출
     job_id = request.query_params.get("job_id")
     if not job_id:
@@ -114,6 +129,9 @@ def status(request):
     if not job:
         return Response({"error": "Job not found", "job_id": job_id}, status=drf_status.HTTP_404_NOT_FOUND)
 
+    if job.get("uid") != uid:
+        return _forbidden()
+    
     # 응답 직렬화 (검증 및 포맷팅)
     resp_ser = StatusResponseSerializer(
         {
@@ -129,7 +147,11 @@ def result(request):
     """
     GET /api/result?job_id=...
     Returns the final emotion analysis result when ready.
+    Requires Firebase auth:
+      Authorization: Bearer <ID_TOKEN>
     """
+    uid, _decoded = authenticate_request(request)
+
     # 쿼리 파라미터에서 작업 ID 추출
     job_id = request.query_params.get("job_id")
     if not job_id:
@@ -139,6 +161,10 @@ def result(request):
     job = _get_job(job_id)
     if not job:
         return Response({"error": "Job not found", "job_id": job_id}, status=drf_status.HTTP_404_NOT_FOUND)
+    
+    # Owner-only access check
+    if job.get("uid") != uid:
+        return _forbidden()
 
     # 작업 상태 확인
     status_val = job.get("status")
