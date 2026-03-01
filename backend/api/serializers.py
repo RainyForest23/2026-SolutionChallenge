@@ -27,34 +27,42 @@ class StatusResponseSerializer(serializers.Serializer):
     status = serializers.CharField()
     error = serializers.CharField(allow_null=True, required=False, allow_blank=True)
 
+# ---- 2-Track Result Schema ----
 # {
-#   "t_start": 5,
-#   "t_end": 10,
-#   "emotion": "happy",
-#   "intensity": 0.8
+#   "job_id": "abc123",
+#   "status": "done",
+#   "result": {
+#     "timeline": [
+#       {
+#         "t_start": 0.0,
+#         "t_end": 10.0,
+#         "base_mood": { "label": "tension", "intensity": 0.75 },
+#         "dynamic_event": { "label": "swell", "intensity": 0.60 },
+#         "confidence": 0.92
+#       }
+#     ]
+#   }
 # }
-class EmotionSegmentSerializer(serializers.Serializer):
+class BaseMoodSerializer(serializers.Serializer):
+    # e.g. tension, sorrow, uplift, warmth, unknown
+    label = serializers.CharField()
+    # 0.0 ~ 1.0
+    intensity = serializers.FloatField(min_value=0.0, max_value=1.0)
+class DynamicEventSerializer(serializers.Serializer):
+    # e.g. stable, jump_scare, swell, sudden_drop
+    label = serializers.CharField()
+    # 0.0 ~ 1.0
+    intensity = serializers.FloatField(min_value=0.0, max_value=1.0, required=False, default=0.0)
+class TimelineSegment2TrackSerializer(serializers.Serializer):
     t_start = serializers.FloatField()
     t_end = serializers.FloatField()
-    emotion = serializers.CharField()
-    intensity = serializers.FloatField()
-
-# Each item in the list must match EmotionSegmentSerializer
-# {
-#   "emotion_timeline": [ ... segments ... ]
-# }
+    base_mood = BaseMoodSerializer()
+    dynamic_event = DynamicEventSerializer()
+    confidence = serializers.FloatField(min_value=0.0, max_value=1.0, required=False)
 class ResultPayloadSerializer(serializers.Serializer):
-    emotion_timeline = serializers.ListSerializer(child=EmotionSegmentSerializer())
+    timeline = serializers.ListSerializer(child=TimelineSegment2TrackSerializer())
 
 # GET /api/result
-# wraps into 
-    # {
-        # "job_id": "abc123",
-        # "status": "done",
-        # "result": {
-        #     "emotion_timeline": [...]
-        # }
-    # }
 class ResultResponseSerializer(serializers.Serializer):
     job_id = serializers.CharField()
     status = serializers.CharField()

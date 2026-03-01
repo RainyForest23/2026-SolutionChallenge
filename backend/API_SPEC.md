@@ -5,9 +5,17 @@
 - **Base URL**: `http://127.0.0.1:8080`
 - **Protocol**: HTTP/REST
 - **Response Format**: JSON
-- **Authentication**: 현재 없음 (Phase 1)
-
+- **Authentication**: Firebase ID Token (Bearer)
 ---
+
+## 🔐 Authentication
+
+모든 API는 Firebase ID Token 인증이 필요합니다.
+
+Authorization: Bearer <FIREBASE_ID_TOKEN>
+
+- 로그인 후 발급된 ID Token을 사용합니다.
+- 사용자는 본인이 생성한 job만 조회할 수 있습니다.
 
 ## 아키텍처
 
@@ -112,6 +120,7 @@ Location: /api/status?job_id={job_id}
 ```bash
 curl -X POST http://127.0.0.1:8080/api/analyze \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
   -d '{
     "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     "callback_url": "https://example.com/webhook"
@@ -186,7 +195,8 @@ curl -X POST http://127.0.0.1:8080/api/analyze \
 #### 예시
 
 ```bash
-curl -X GET "http://127.0.0.1:8080/api/status?job_id=a1b2c3d4e5f6g7h8"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 ```
 
 #### 처리 중 응답
@@ -242,26 +252,21 @@ curl -X GET "http://127.0.0.1:8080/api/status?job_id=a1b2c3d4e5f6g7h8"
   "job_id": "a1b2c3d4e5f6g7h8",
   "status": "done",
   "result": {
-    "emotion_timeline": [
+    "timeline": [
       {
         "t_start": 0.0,
         "t_end": 5.0,
-        "emotion": "neutral",
-        "intensity": 0.3
-      },
-      {
-        "t_start": 5.0,
-        "t_end": 10.0,
-        "emotion": "happy",
-        "intensity": 0.7
-      },
-      {
-        "t_start": 10.0,
-        "t_end": 15.0,
-        "emotion": "sad",
-        "intensity": 0.5
+        "base_mood": {
+          "label": "tension",
+          "intensity": 0.75
+        },
+        "dynamic_event": {
+          "label": "swell",
+          "intensity": 0.60
+        },
+        "confidence": 0.92
       }
-    ]
+    ],
   }
 }
 ```
@@ -282,7 +287,8 @@ curl -X GET "http://127.0.0.1:8080/api/status?job_id=a1b2c3d4e5f6g7h8"
 #### 예시
 
 ```bash
-curl -X GET "http://127.0.0.1:8080/api/result?job_id=a1b2c3d4e5f6g7h8"
+curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 ```
 
 #### 에러 응답
@@ -312,6 +318,7 @@ curl -X GET "http://127.0.0.1:8080/api/result?job_id=a1b2c3d4e5f6g7h8"
 ```bash
 curl -X POST http://127.0.0.1:8080/api/analyze \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
   -d '{"youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
 
@@ -326,33 +333,39 @@ curl -X POST http://127.0.0.1:8080/api/analyze \
 **Step 2: 상태 폴링 (1초 간격)**
 ```bash
 # 1번째 시도
-curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 # → { "job_id": "abc123def456", "status": "queued", "error": null }
 
 
 # 2번째 시도 (3초 뒤)
-curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 # → { "job_id": "abc123def456", "status": "downloading", "error": null }
 
 
 # 3번째 시도 (6초 뒤)
-curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 # → { "job_id": "abc123def456", "status": "uploading", "error": null }
 
 
 # 4번째 시도 (9초 뒤)
-curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 # → { "job_id": "abc123def456", "status": "processing", "error": null }
 
 
 # 5번째 시도 (15초 뒤)
-curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 # → { "job_id": "abc123def456", "status": "done", "error": null }
 ```
 
 **Step 3: 결과 조회**
 ```bash
-curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 ```
 
 응답:
@@ -361,12 +374,25 @@ curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123def456"
   "job_id": "abc123def456",
   "status": "done",
   "result": {
-    "emotion_timeline": [
-      { "t_start": 0, "t_end": 5, "emotion": "neutral", "intensity": 0.3 },
-      { "t_start": 5, "t_end": 10, "emotion": "happy", "intensity": 0.7 }
+    "timeline": [
+      {
+        "t_start": 0.0,
+        "t_end": 5.0,
+        "base_mood": { "label": "tension", "intensity": 0.75 }, //tension, sorrow, uplift, warmth, unknow
+        "dynamic_event": { "label": "swell", "intensity": 0.60 }, //stable, jump_scare, swell, sudden_drop
+        "confidence": 0.92
+      },
+      {
+        "t_start": 5.0,
+        "t_end": 10.0,
+        "base_mood": { "label": "sorrow", "intensity": 0.35 },
+        "dynamic_event": { "label": "stable", "intensity": 0.10 },
+        "confidence": 0.92
+      },
     ]
   }
 }
+
 ```
 
 ---
@@ -428,9 +454,10 @@ http://127.0.0.1:8080/api/analyze
 ### GET `/api/status` 테스트
 
 브라우저 주소창에 입력:
+“브라우저 테스트 시, 상단의 Headers 또는 Authorization에 Bearer <TOKEN>을 포함해야 합니다.”
 
 ```
-http://127.0.0.1:8080/api/status?job_id=abc123def456
+http://127.0.0.1:8080/api/status?job_id=abc123
 ```
 
 응답 예시:
@@ -450,7 +477,7 @@ http://127.0.0.1:8080/api/status?job_id=abc123def456
 브라우저 주소창에 입력:
 
 ```
-http://127.0.0.1:8080/api/result?job_id=abc123def456
+http://127.0.0.1:8080/api/result?job_id=abc123
 ```
 
 처리 중일 경우:
@@ -472,19 +499,22 @@ http://127.0.0.1:8080/api/result?job_id=abc123def456
 ```bash
 curl -X POST http://127.0.0.1:8080/api/analyze \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
   -d '{"youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
 
 ### 상태 조회
 
 ```bash
-curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 ```
 
 ### 결과 조회
 
 ```bash
-curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123def456"
+curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123" \
+  -H "Authorization: Bearer <TOKEN>"
 ```
 
 ---
@@ -503,5 +533,5 @@ curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123def456"
 | 버전 | 날짜 | 변경사항 |
 |------|------|--------|
 | v1.0 | 2026-02-26 | 초기 API 명세 작성 |
-
+| v2.0 | 2026-03-01 | Firebase 인증 추가 + 2-Track 시스템 적용 |
 ---
