@@ -55,3 +55,8 @@ def feedback_doc(uid: str, video_id: str, feedback_id: str) -> str:
 # 피드백 문서 저장을 위해 가져오는 컬렉션 경로
 def feedbacks_collection(uid: str, video_id: str) -> str:
     return f"{USERS}/{uid}/{VIDEOS}/{video_id}/{FEEDBACK}"
+
+
+# 추후 확장 가능성을 위한 오디오 파일 저장 경로 (firestore X, storage에 저장)
+def audio_storage_path(uid: str, video_id: str, audio_id: str) -> str:
+    return f"audios/{uid}/{video_id}/{audio_id}.mp3"
