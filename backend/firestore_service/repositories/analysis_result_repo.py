@@ -1,6 +1,7 @@
 from google.cloud import firestore
 from typing import Any, Dict, List, Optional
-from .paths import analysis_results_collection, analysis_result_doc, analysis_result_storage_path
+from .repo_paths import analysis_results_collection, analysis_result_doc
+from ..storage_paths import result_object_path
 
 db = firestore.Client()
 
@@ -39,7 +40,7 @@ class AnalysisResultRepository:
         new_doc = ref.document()
 
         result_id = new_doc.id
-        result_path = analysis_result_storage_path(uid, video_id, result_id)
+        result_path = result_object_path(uid, video_id, result_id)
 
         payload: Dict[str, Any] = {
             "resultPath": result_path,
