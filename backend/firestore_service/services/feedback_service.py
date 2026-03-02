@@ -92,5 +92,5 @@ class FeedbackService:
 
 
     def _ensure_exists(self, uid: str, video_id: str, feedback_id: str) -> None:
-        if not self.feedback_repo.exists_result(uid, video_id, feedback_id):
+        if not self.feedback_repo.exists_feedback(uid, video_id, feedback_id):
             raise NotFoundError("Feedback not found")
