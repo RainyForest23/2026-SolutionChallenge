@@ -1,6 +1,6 @@
 from google.cloud import firestore
 from typing import Any, Dict, List, Optional
-from .paths import video_doc, videos_collection, video_storage_path
+from .repo_paths import video_doc, videos_collection
 
 db = firestore.Client()
 
@@ -62,15 +62,13 @@ class VideoRepository:
     
 
     # storagePath 업데이트. storage에 비디오 업로드 완료 후 채움
-    def update_video_storage_path(self, uid: str, video_id: str) -> str:
+    def update_video_storage_path(self, uid: str, video_id: str, storage_path: str) -> str:
         ref = self._doc_ref(uid, video_id)
-        storage_path = video_storage_path(uid, video_id)
 
         ref.update({
             "storagePath": storage_path,
             "updatedAt": self._now_ts(),
         })
-        return storage_path
 
 
     # users/{uid}/videos/{videoId} 문서 수정

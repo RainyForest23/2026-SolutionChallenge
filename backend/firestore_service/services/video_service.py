@@ -125,13 +125,18 @@ class VideoService:
 
 
     # job이 processing으로 들어갈 때 storagePath 채우기
-    def update_video_storage_path(self, uid: str, video_id: str) -> str:
+    def update_video_storage_path(self, uid: str, video_id: str, storage_path: str) -> str:
         """
-        video.storagePath를 'videos/{uid}/{videoId}.mp4' 로 채움.
+        video.storagePath를 실제 업로드된 storage_path로 갱신.
         주의: status 판단은 job_service에서 한다.
         """
         self._ensure_exists(uid, video_id)
-        storage_path = self.video_repo.update_video_storage_path(uid, video_id)
+
+        storage_path = (storage_path or "").strip()
+        if not storage_path:
+            raise BadRequestError("storagePath는 비어있을 수 없습니다.")
+        
+        self.video_repo.update_video_storage_path(uid, video_id, storage_path)
         return storage_path
 
 

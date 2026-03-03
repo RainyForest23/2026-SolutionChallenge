@@ -1,6 +1,6 @@
 from google.cloud import firestore
 from typing import Any, Dict, List, Optional
-from .paths import feedback_doc, feedbacks_collection
+from .repo_paths import feedback_doc, feedbacks_collection
 
 db = firestore.Client()
 
