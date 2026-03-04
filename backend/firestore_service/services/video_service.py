@@ -52,9 +52,8 @@ class ConflictError(Exception):
     
 
 class VideoService:
-    def __init__(self, video_repo, job_repo):
+    def __init__(self, video_repo):
         self.video_repo = video_repo
-        self.job_repo = job_repo
 
 
     # analyze 시작 전 video 생성
