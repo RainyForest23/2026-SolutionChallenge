@@ -19,8 +19,9 @@ ALLOWED_NEXT = {
 }
 
 class JobService:
-    def __init__(self, job_repo):
+    def __init__(self, job_repo, video_repo):
         self.job_repo = job_repo
+        self.video_repo = video_repo
 
 
     # job_id는 views.py에서 생성
@@ -67,7 +68,7 @@ class JobService:
 
         job = self.get_job(uid, job_id)
         current_status = job.get("status")
-
+        
         # 현재 상태가 없거나 이상하면 방어
         if current_status not in VALID_STATUSES:
             raise BadRequestError(f"Corrupted job status: {current_status}")
@@ -76,7 +77,6 @@ class JobService:
         if new_status == current_status:
             # error만 바꾸는 케이스 허용
             if error is not None:
-                patch["error"] = error
                 self.job_repo.update_job(uid, job_id, {"error": error})
                 job["error"] = error
             return job
@@ -99,6 +99,15 @@ class JobService:
         self.job_repo.update_job(uid, job_id, patch)
         # 반환용으로 job dict 갱신
         job.update(patch)
+        # video currentStatus 동기화
+        video_id = job.get("videoId")
+        if video_id:
+            video_status = self.video_repo.get_video("currentStatus")
+
+            # 앞으로 가는 전이만 허용, 뒤로 가는 업데이트는 무시
+            if new_status == "failed" or new_status in ALLOWED_NEXT.get(video_status, set()):
+                self.video_repo.update_latest_status(uid, video_id, new_status)
+            
         return job
 
 

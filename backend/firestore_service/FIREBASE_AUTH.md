@@ -19,9 +19,16 @@ Firebase ID Token 발급
 HTTP 요청
 Authorization: Bearer <ID_TOKEN>
   ↓
-Django (verify_id_token)
+DRF authentication 실행
+FirebaseAuthentication.authenticate()
   ↓
-uid 추출
+DRF permission 검사 (자동)
+  ↓
+Firebase (verify_id_token)
+request.user = uid
+request.auth = decoded
+  ↓
+view (uid = request.user)
 ```
 
 ## 로컬 개발 환경 설정
@@ -39,9 +46,11 @@ uid 추출
 ## 모듈 구조
 
 ```
+api/
+ └── authentication.py   # DRF 자동 실행 
 firestore_service/
  ├── firebase_app.py   # Firebase Admin SDK 초기화
- └── auth.py           # ID Token 검증 helper
+ └── auth_helper.py    # ID Token 검증 helper
 ```
 
 ## 백엔드 내 사용 방법
@@ -51,14 +60,32 @@ firestore_service/
 Authorization: Bearer <ID_TOKEN>
 ```
 
-### 2️⃣ View 내부에서 다음 helper 사용
+### 2️⃣ View 내부에서 인증 사용 방법
+DRF FirebaseAuthentication이 요청 처리 전에 자동으로 실행됩니다.
+인증이 성공하면 다음 값이 설정됩니다.
+- request.user → Firebase uid
+- request.auth → decoded Firebase ID Token
+
+View에서는 request.user를 사용하면 됩니다.
 
 ```python
-from firestore_service.auth import authenticate_uid
+from rest_framework.permissions import IsAuthenticated
+
+@api_view(["POST"])
+def some_view(request):
+    uid = request.user
+    decoded_token = request.auth   # 필요할 때만 사용
+    ...
+```
+
+공개 API가 필요할 경우는 예외 처리 합니다.
+
+```python
+from rest_framework.permissions import AllowAny
 
 @api_view(["GET"])
-def some_view(request):
-    uid = authenticate_uid(request)
+@permission_classes([AllowAny])
+def open_view(request):
     ...
 ```
 
@@ -89,3 +116,4 @@ Authorization: Bearer <ID_TOKEN>
 - Firebase Admin SDK 연동 완료
 - ID Token 검증 성공
 - /api/me 테스트 통과
+- DRF 인증 자동 실행 설정 (settings.py)

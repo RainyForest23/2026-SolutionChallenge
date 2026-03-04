@@ -40,7 +40,7 @@ class VideoRepository:
         payload = dict(data)
         payload["uid"] = uid
         payload.setdefault("sourceType", "youtube")  # 우선 고정
-        payload.setdefault("currentStatus", "queued")  # 우선 고정
+        payload.setdefault("currentStatus", "queued")  # default
         payload["createdAt"] = self._now_ts()
         payload["updatedAt"] = self._now_ts()
 
@@ -82,7 +82,7 @@ class VideoRepository:
 
 
     # 현재 job status 갱신. updatedAt 갱신 X
-    def update_latest_job(self, uid: str, video_id: str, status: str) -> None:
+    def update_latest_status(self, uid: str, video_id: str, status: str) -> None:
         ref = self._doc_ref(uid, video_id)
         ref.update({"currentStatus": status})
         

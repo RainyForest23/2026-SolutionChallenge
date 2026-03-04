@@ -12,6 +12,10 @@ FEEDBACK = "feedbacks"
 def user_doc(uid: str) -> str:
     return f"{USERS}/{uid}"
 
+# 사용자 문서 저장을 위해 가져오는 컬렉션 경로
+def users_collection() -> str:
+    return f"{USERS}"
+
 
 # 비디오 문서 저장하는 경로
 def video_doc(uid: str, video_id: str) -> str:
