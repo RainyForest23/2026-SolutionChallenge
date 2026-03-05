@@ -1,12 +1,22 @@
-from typing import Any, Dict, Optional
+import json
+import logging
 import uuid
-from django.utils import timezone
-from django.core.cache import cache
+
+from django.http import Http404
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status as drf_status
-from firestore_service.auth import authenticate_request
-import logging
+from rest_framework.exceptions import ValidationError, NotAuthenticated
+
+from firestore_service.auth_helper import authenticate_request
+from firestore_service.repositories.user_repo import UserRepository
+from firestore_service.repositories.video_repo import VideoRepository
+from firestore_service.repositories.job_repo import JobRepository
+from firestore_service.repositories.analysis_result_repo import AnalysisResultRepository
+from firestore_service.services.user_service import UserService
+from firestore_service.services.video_service import VideoService, BadRequestError as VideoBadRequestError, ConflictError as VideoConflictError, NotFoundError as VideoNotFoundError
+from firestore_service.services.job_service import JobService, BadRequestError as JobBadRequestError, NotFoundError as JobNotFoundError
+from firestore_service.services.analysis_result_service import AnalysisResultService, BadRequestError as ResultBadRequestError, NotFoundError as ResultNotFoundError
 
 from .serializers import (
     AnalyzeRequestSerializer,
@@ -17,170 +27,210 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# Firestore를 먼저 시도하고, 사용 불가능하면 Django 캐시로 폴백
-try:
-    from google.cloud import firestore
-
-    _FS_CLIENT = firestore.Client()
-except Exception:
-    _FS_CLIENT = None
-
-# Celery 작업 시도 (선택사항). backend/api/tasks.py에서 analyze_video_task를 구현해야 함
 try:
     from .tasks import analyze_video_task
 except Exception:
     analyze_video_task = None
 
-# 현재 시간을 ISO 형식 문자열로 반환
-def _now_iso() -> str:
-    return timezone.now().isoformat()
 
-# 작업 정보를 Firestore 또는 캐시에 저장
-def _save_job(job_id: str, payload: Dict[str, Any]) -> None:
-    if _FS_CLIENT:
-        # Firestore에 저장
-        doc_ref = _FS_CLIENT.collection("jobs").document(job_id)
-        doc_ref.set(payload)
-    else:
-        # 캐시에 저장 (Firestore 없을 때)
-        cache.set(f"job:{job_id}", payload, timeout=None)
+user_repo = UserRepository()
+video_repo = VideoRepository()
+job_repo = JobRepository()
+analysis_result_repo = AnalysisResultRepository()
 
-# 저장된 작업 정보를 조회
-def _get_job(job_id: str) -> Optional[Dict[str, Any]]:
-    if _FS_CLIENT:
-        # Firestore에서 조회
-        doc = _FS_CLIENT.collection("jobs").document(job_id).get()
-        return doc.to_dict() if doc.exists else None
-    # 캐시에서 조회
-    return cache.get(f"job:{job_id}")
+user_service = UserService(user_repo)
+video_service = VideoService(video_repo)
+job_service = JobService(job_repo, video_repo)
+analysis_result_service = AnalysisResultService(analysis_result_repo)
 
 def _forbidden() -> Response:
-    # don’t leak whether the job exists for other users.
-    return Response({"error": "Forbidden"}, status=drf_status.HTTP_403_FORBIDDEN)
+    return Response({"detail": "Forbidden"}, status=drf_status.HTTP_403_FORBIDDEN)
+
+def _handle_service_error(exc: Exception) -> Response:
+    if isinstance(exc, (VideoBadRequestError, JobBadRequestError, ResultBadRequestError)):
+        detail = exc.args[0] if exc.args else "Bad request"
+        if isinstance(detail, dict):
+            raise ValidationError(detail)
+        return Response({"detail": detail}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+    if isinstance(exc, VideoConflictError):
+        return Response({"detail": str(exc)}, status=drf_status.HTTP_409_CONFLICT)
+
+    if isinstance(exc, (VideoNotFoundError, JobNotFoundError, ResultNotFoundError)):
+        raise Http404(str(exc))
+
+    logger.exception("Unhandled service error")
+    return Response({"detail": "Internal server error"}, status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(["POST"])
 def analyze(request):
     """
     POST /api/analyze
-    Starts a new emotion analysis job (queued). Returns 202 Accepted with Location header.
-    Requires Firebase auth:
-    Authorization: Bearer <ID_TOKEN>
-    Body: { "youtube_url": "...", "upload_id": "...", "callback_url": "optional" }
+    Create video + create job + enqueue background pipeline.
+    Owner-only API.
     """
-    # Require auth + capture owner uid
-    uid, _decoded = authenticate_request(request)
+    uid, decoded = authenticate_request(request)
 
-    # 요청 데이터 검증
+    # create/update users/{uid}
+    try:
+        user_service.upsert_user_from_decoded(decoded)
+    except Exception:
+        logger.exception("Failed to upsert user from decoded token")
+
     serializer = AnalyzeRequestSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=drf_status.HTTP_400_BAD_REQUEST)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
 
-    # 고유 작업 ID 생성
-    job_id = uuid.uuid4().hex
-    payload = {
-        "job_id": job_id,
-        "uid": uid,  # owner of this job
-        "status": "queued",  # 초기 상태: 대기 중
-        "input": serializer.validated_data,
-        "created_at": _now_iso(),
-        "updated_at": _now_iso(),
-        "error": None,
-        "result": None,
-    }
-    # 작업 정보 저장
-    _save_job(job_id, payload)
+    youtube_url = data.get("youtube_url")
+    upload_id = data.get("upload_id")
+    callback_url = data.get("callback_url")
+    title = data.get("title") or "Untitled Video"
 
-    # 백그라운드 작업 대기열에 추가 (Celery 작업이 존재하면)
-    if analyze_video_task:
-        try:
-            analyze_video_task.delay(job_id, serializer.validated_data)
-        except Exception:
-            logger.exception("Failed to enqueue analyze_video_task")
-            # 작업 대기열 추가 실패 시 상태를 'failed'로 업데이트
-            payload["status"] = "failed"
-            payload["error"] = "failed to enqueue task"
-            payload["updated_at"] = _now_iso()
-            _save_job(job_id, payload)
-            return Response({"job_id": job_id, "status": "failed"}, status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR)
+    try:
+        # current architecture is video-first, then job
+        if youtube_url:
+            video = video_service.create_video(
+                uid=uid,
+                title=title,
+                youtube_url=youtube_url,
+                duration_sec=None,
+            )
+            video_id = video["videoId"]
+        else:
+            # upload_id flow is not fully designed in current service layer yet
+            return Response(
+                {"detail": "upload_id flow is not implemented yet in current service layer."},
+                status=drf_status.HTTP_501_NOT_IMPLEMENTED,
+            )
 
-    # 202 Accepted 응답 반환 (표준 비동기 작업 응답)
-    resp = Response({"job_id": job_id, "status": "queued"}, status=drf_status.HTTP_202_ACCEPTED)
-    resp["Location"] = f"/api/status?job_id={job_id}"  # 상태 조회 엔드포인트 위치
-    return resp
+        job_id = uuid.uuid4().hex
+        job_service.create_job(uid=uid, job_id=job_id, video_id=video_id, status="queued")
+
+        if analyze_video_task:
+            try:
+                analyze_video_task.delay(
+                    uid=uid,
+                    job_id=job_id,
+                    video_id=video_id,
+                    youtube_url=youtube_url,
+                    upload_id=upload_id,
+                    callback_url=callback_url,
+                )
+            except Exception:
+                logger.exception("Failed to enqueue analyze_video_task")
+                job_service.fail_job(uid, job_id, "failed to enqueue task")
+                return Response(
+                    {"job_id": job_id, "video_id": video_id, "status": "failed"},
+                    status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        resp_data = AnalyzeResponseSerializer(
+            {
+                "job_id": job_id,
+                "video_id": video_id,
+                "status": "queued",
+            }
+        ).data
+
+        resp = Response(resp_data, status=drf_status.HTTP_202_ACCEPTED)
+        resp["Location"] = f"/api/status?job_id={job_id}"
+        return resp
+
+    except Exception as exc:
+        return _handle_service_error(exc)
 
 @api_view(["GET"])
 def status(request):
     """
     GET /api/status?job_id=...
-    Returns current processing status.
-        Requires Firebase auth:
-      Authorization: Bearer <ID_TOKEN>
+    Returns current processing status for the owner's job.
     """
-
     uid, _decoded = authenticate_request(request)
 
-    # 쿼리 파라미터에서 작업 ID 추출
     job_id = request.query_params.get("job_id")
     if not job_id:
-        return Response({"error": "Missing required query param: job_id"}, status=drf_status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "Missing required query param: job_id"},
+            status=drf_status.HTTP_400_BAD_REQUEST,
+        )
 
-    # 저장된 작업 정보 조회
-    job = _get_job(job_id)
-    if not job:
-        return Response({"error": "Job not found", "job_id": job_id}, status=drf_status.HTTP_404_NOT_FOUND)
+    try:
+        job = job_service.get_job(uid, job_id)
 
-    if job.get("uid") != uid:
-        return _forbidden()
-    
-    # 응답 직렬화 (검증 및 포맷팅)
-    resp_ser = StatusResponseSerializer(
-        {
-            "job_id": job_id,
-            "status": job.get("status", "unknown"),  # 상태: queued, processing, done, failed, downloading, uploading
-            "error": job.get("error"),  # 오류 메시지 (있으면)
-        }
-    )
-    return Response(resp_ser.data, status=drf_status.HTTP_200_OK)
+        resp_data = StatusResponseSerializer(
+            {
+                "job_id": job_id,
+                "video_id": job.get("videoId"),
+                "status": job.get("status", "unknown"),
+                "error": job.get("error"),
+            }
+        ).data
+        return Response(resp_data, status=drf_status.HTTP_200_OK)
+
+    except Exception as exc:
+        return _handle_service_error(exc)
 
 @api_view(["GET"])
 def result(request):
     """
     GET /api/result?job_id=...
-    Returns the final emotion analysis result when ready.
-    Requires Firebase auth:
-      Authorization: Bearer <ID_TOKEN>
+    Returns final analysis result when ready.
+    Result body is expected to come from result JSON in Storage,
+    while Firestore stores only the metadata/path.
     """
     uid, _decoded = authenticate_request(request)
 
-    # 쿼리 파라미터에서 작업 ID 추출
     job_id = request.query_params.get("job_id")
     if not job_id:
-        return Response({"error": "Missing required query param: job_id"}, status=drf_status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "Missing required query param: job_id"},
+            status=drf_status.HTTP_400_BAD_REQUEST,
+        )
 
-    # 저장된 작업 정보 조회
-    job = _get_job(job_id)
-    if not job:
-        return Response({"error": "Job not found", "job_id": job_id}, status=drf_status.HTTP_404_NOT_FOUND)
-    
-    # Owner-only access check
-    if job.get("uid") != uid:
-        return _forbidden()
+    try:
+        job = job_service.get_job(uid, job_id)
+        status_val = job.get("status")
+        video_id = job.get("videoId")
 
-    # 작업 상태 확인
-    status_val = job.get("status")
-    if status_val != "done":
-        # 결과가 아직 준비되지 않음 (202 Accepted = 계속 기다려야 함)
-        return Response({"job_id": job_id, "status": status_val, "message": "Result not ready yet."}, status=drf_status.HTTP_202_ACCEPTED)
+        if status_val != "done":
+            return Response(
+                {
+                    "job_id": job_id,
+                    "video_id": video_id,
+                    "status": status_val,
+                    "message": "Result not ready yet.",
+                },
+                status=drf_status.HTTP_202_ACCEPTED,
+            )
 
-    # 작업 완료: 최종 결과 반환
-    resp_ser = ResultResponseSerializer(
-        {
-            "job_id": job_id,
-            "status": "done",
-            "result": job.get("result", {}),  # 감정 타임라인 데이터
-        }
-    )
-    return Response(resp_ser.data, status=drf_status.HTTP_200_OK)
+        latest_result = analysis_result_service.get_latest_result(uid, video_id)
+        if not latest_result:
+            raise Http404("Analysis result not found")
+
+        # Firestore stores only resultPath, not the actual timeline JSON body.
+        # For now, if pipeline saved parsed result in Firestore-compatible field, use it.
+        # Later this should download/read the JSON file from Firebase Storage.
+        result_body = latest_result.get("result")
+        if result_body is None:
+            result_body = {
+                "videoUrl": "",
+                "base_moods": [],
+                "events": [],
+            }
+
+        resp_data = ResultResponseSerializer(
+            {
+                "job_id": job_id,
+                "video_id": video_id,
+                "status": "done",
+                "result": result_body,
+            }
+        ).data
+
+        return Response(resp_data, status=drf_status.HTTP_200_OK)
+
+    except Exception as exc:
+        return _handle_service_error(exc)
 
 # Auth 연동 확인 엔드포인트
 @api_view(["GET"])
