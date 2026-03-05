@@ -5,7 +5,7 @@
 - **Base URL**: `http://127.0.0.1:8080`
 - **Protocol**: HTTP/REST
 - **Response Format**: JSON
-- **Authentication**: Firebase ID Token (Bearer)
+- **Authentication**: Firebase ID Token (Bearer, 모든 엔드포인트 필수)
 ---
 
 ## 🔐 Authentication
@@ -14,20 +14,18 @@
 
 Authorization: Bearer <FIREBASE_ID_TOKEN>
 
-- 로그인 후 발급된 ID Token을 사용합니다.
-- 사용자는 본인이 생성한 job만 조회할 수 있습니다.
+- 로그인 후 발급된 Firebase ID Token을 사용합니다.
+- 백엔드에서는 인증 성공 시 request.user에 Firebase uid를 저장합니다.
+- request.auth에는 decode된 Firebase 토큰 payload가 들어갑니다.
+- 사용자는 본인 소유의 리소스만 조회할 수 있습니다.
 
 ## 아키텍처
 
-작업은 3단계로 진행됩니다:
+작업은 다음 순서로 진행됩니다:
 
-```
-1. POST /api/analyze     → 작업 생성 및 백그라운드 큐 등록
-   ↓
-2. GET /api/status       → 진행 상황 폴링
-   ↓
-3. GET /api/result       → 완료 후 결과 조회
-```
+1. `POST /api/analyze` → video 문서 생성 + job 문서 생성 + 백그라운드 큐 등록
+2. `GET /api/status` → job 상태 폴링
+3. `GET /api/result` → 완료된 분석 결과 조회
 
 ### 상태 전이 다이어그램
 
@@ -82,6 +80,7 @@ Authorization: Bearer <FIREBASE_ID_TOKEN>
 **Request Body**:
 ```json
 {
+  "title": "Sample Video",
   "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   "upload_id": "uploads/video123",
   "callback_url": "https://example.com/webhook"
@@ -89,14 +88,17 @@ Authorization: Bearer <FIREBASE_ID_TOKEN>
 ```
 
 **필드 설명**:
-
 | 필드 | 타입 | 필수 | 설명 |
 |------|------|------|------|
+| `title` | string | 선택 | 영상 제목. 없으면 백엔드에서 기본값(예: `"Untitled Video"`)을 사용할 수 있음 |
 | `youtube_url` | URL | 조건부* | YouTube 비디오 URL |
 | `upload_id` | string | 조건부* | 사전 업로드된 파일의 식별자 |
 | `callback_url` | URL | 선택 | 작업 완료 시 POST될 웹훅 URL |
 
 *조건: `youtube_url` 또는 `upload_id` 중 **최소 하나는 필수**
+
+> 현재 백엔드 구현 기준으로는 `youtube_url` 기반 분석 플로우가 우선 지원됩니다.  
+> `upload_id` 기반 플로우는 추후 구현 예정이며 현재는 `501 Not Implemented`를 반환할 수 있습니다.
 
 #### 응답
 
@@ -111,6 +113,7 @@ Location: /api/status?job_id={job_id}
 ```json
 {
   "job_id": "a1b2c3d4e5f6g7h8",
+  "video_id": "video123abc",
   "status": "queued"
 }
 ```
@@ -122,6 +125,7 @@ curl -X POST http://127.0.0.1:8080/api/analyze \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <TOKEN>" \
   -d '{
+    "title": "Sample Video",
     "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     "callback_url": "https://example.com/webhook"
   }'
@@ -147,7 +151,15 @@ curl -X POST http://127.0.0.1:8080/api/analyze \
 ```json
 {
   "job_id": "a1b2c3d4e5f6g7h8",
+  "video_id": "video123abc",
   "status": "failed"
+}
+```
+
+**501 Not Implemented** — `upload_id` 기반 플로우는 아직 구현되지 않음:
+```json
+{
+  "detail": "upload_id flow is not implemented yet in current service layer."
 }
 ```
 
@@ -176,6 +188,7 @@ curl -X POST http://127.0.0.1:8080/api/analyze \
 ```json
 {
   "job_id": "a1b2c3d4e5f6g7h8",
+  "video_id": "video123abc",
   "status": "processing",
   "error": null
 }
@@ -204,6 +217,7 @@ curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
 ```json
 {
   "job_id": "a1b2c3d4e5f6g7h8",
+  "video_id": "video123abc",
   "status": "processing",
   "error": null
 }
@@ -214,15 +228,14 @@ curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
 **404 Not Found** — 작업을 찾을 수 없음:
 ```json
 {
-  "error": "Job not found",
-  "job_id": "invalid_id"
+  "detail": "Job not found"
 }
 ```
 
 **400 Bad Request** — job_id 누락:
 ```json
 {
-  "error": "Missing required query param: job_id"
+  "detail": "Missing required query param: job_id"
 }
 ```
 
@@ -250,23 +263,27 @@ curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
 ```json
 {
   "job_id": "a1b2c3d4e5f6g7h8",
+  "video_id": "video123abc",
   "status": "done",
   "result": {
-    "timeline": [
+    "schemaVersion": "1.0.0",
+    "videoUrl": "https://storage.googleapis.com/...",
+    "base_moods": [
       {
-        "t_start": 0.0,
-        "t_end": 5.0,
-        "base_mood": {
-          "label": "tension",
-          "intensity": 0.75
-        },
-        "dynamic_event": {
-          "label": "swell",
-          "intensity": 0.60
-        },
-        "confidence": 0.92
+        "label": "tension",
+        "intensity": 0.75,
+        "start": 0.0,
+        "end": 5.0
       }
     ],
+    "events": [
+      {
+        "type": "swell",
+        "trigger_time": 3.2,
+        "duration": 1.8,
+        "strength": 0.60
+      }
+    ]
   }
 }
 ```
@@ -279,6 +296,7 @@ curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
 ```json
 {
   "job_id": "a1b2c3d4e5f6g7h8",
+  "video_id": "video123abc",
   "status": "processing",
   "message": "Result not ready yet."
 }
@@ -296,15 +314,14 @@ curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123" \
 **404 Not Found**:
 ```json
 {
-  "error": "Job not found",
-  "job_id": "invalid_id"
+  "detail": "Job not found",
 }
 ```
 
 **400 Bad Request**:
 ```json
 {
-  "error": "Missing required query param: job_id"
+  "detail": "Missing required query param: job_id"
 }
 ```
 
@@ -326,6 +343,7 @@ curl -X POST http://127.0.0.1:8080/api/analyze \
 ```json
 {
   "job_id": "abc123def456",
+  "video_id": "video123abc",
   "status": "queued"
 }
 ```
@@ -335,31 +353,33 @@ curl -X POST http://127.0.0.1:8080/api/analyze \
 # 1번째 시도
 curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
   -H "Authorization: Bearer <TOKEN>"
-# → { "job_id": "abc123def456", "status": "queued", "error": null }
+# → { "job_id": "abc123def456", "video_id": "video123abc", "status": "queued", "error": null }
 
 
 # 2번째 시도 (3초 뒤)
 curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
   -H "Authorization: Bearer <TOKEN>"
-# → { "job_id": "abc123def456", "status": "downloading", "error": null }
+# → { "job_id": "abc123def456", "video_id": "video123abc", "status": "downloading", "error": null }
+
 
 
 # 3번째 시도 (6초 뒤)
 curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
   -H "Authorization: Bearer <TOKEN>"
-# → { "job_id": "abc123def456", "status": "uploading", "error": null }
+# → { "job_id": "abc123def456", "video_id": "video123abc", "status": "uploading", "error": null }
 
 
 # 4번째 시도 (9초 뒤)
 curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
   -H "Authorization: Bearer <TOKEN>"
-# → { "job_id": "abc123def456", "status": "processing", "error": null }
+# → { "job_id": "abc123def456", "video_id": "video123abc", "status": "processing", "error": null }
+
 
 
 # 5번째 시도 (15초 뒤)
 curl -X GET "http://127.0.0.1:8080/api/status?job_id=abc123" \
   -H "Authorization: Bearer <TOKEN>"
-# → { "job_id": "abc123def456", "status": "done", "error": null }
+# → { "job_id": "abc123def456", "video_id": "video123abc", "status": "done", "error": null }
 ```
 
 **Step 3: 결과 조회**
@@ -372,23 +392,38 @@ curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123" \
 ```json
 {
   "job_id": "abc123def456",
+  "video_id": "video123abc",
   "status": "done",
   "result": {
-    "timeline": [
+    "schemaVersion": "1.0.0",
+    "videoUrl": "https://storage.googleapis.com/...",
+    "base_moods": [
       {
-        "t_start": 0.0,
-        "t_end": 5.0,
-        "base_mood": { "label": "tension", "intensity": 0.75 }, //tension, sorrow, uplift, warmth, unknow
-        "dynamic_event": { "label": "swell", "intensity": 0.60 }, //stable, jump_scare, swell, sudden_drop
-        "confidence": 0.92
+        "label": "tension",
+        "intensity": 0.75,
+        "start": 0.0,
+        "end": 5.0
       },
       {
-        "t_start": 5.0,
-        "t_end": 10.0,
-        "base_mood": { "label": "sorrow", "intensity": 0.35 },
-        "dynamic_event": { "label": "stable", "intensity": 0.10 },
-        "confidence": 0.92
+        "label": "sorrow",
+        "intensity": 0.35,
+        "start": 5.0,
+        "end": 10.0
+      }
+    ],
+    "events": [
+      {
+        "type": "swell",
+        "trigger_time": 3.0,
+        "duration": 1.5,
+        "strength": 0.60
       },
+      {
+        "type": "stable",
+        "trigger_time": 5.0,
+        "duration": 5.0,
+        "strength": 0.10
+      }
     ]
   }
 }
@@ -445,6 +480,7 @@ http://127.0.0.1:8080/api/analyze
 ```json
 {
   "job_id": "abc123def456",
+  "video_id": "video123abc",
   "status": "queued"
 }
 ```
@@ -465,6 +501,7 @@ http://127.0.0.1:8080/api/status?job_id=abc123
 ```json
 {
   "job_id": "abc123def456",
+  "video_id": "video123abc",
   "status": "queued",
   "error": null
 }
@@ -485,6 +522,7 @@ http://127.0.0.1:8080/api/result?job_id=abc123
 ```json
 {
   "job_id": "abc123def456",
+  "video_id": "video123abc",
   "status": "queued",
   "message": "Result not ready yet."
 }
@@ -500,7 +538,7 @@ http://127.0.0.1:8080/api/result?job_id=abc123
 curl -X POST http://127.0.0.1:8080/api/analyze \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <TOKEN>" \
-  -d '{"youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
+  -d '{"title": "Sample Video", "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
 
 ### 상태 조회
@@ -533,5 +571,6 @@ curl -X GET "http://127.0.0.1:8080/api/result?job_id=abc123" \
 | 버전 | 날짜 | 변경사항 |
 |------|------|--------|
 | v1.0 | 2026-02-26 | 초기 API 명세 작성 |
-| v2.0 | 2026-03-01 | Firebase 인증 추가 + 2-Track 시스템 적용 |
+| v2.0 | 2026-03-01 | Firebase 인증 추가 + 2-Track 시스템 초안 반영 |
+| v3.0 | 2026-03-05 | service/repository 구조 반영 + video_id 추가 + 프론트 최종 결과 스키마 반영 |
 ---
