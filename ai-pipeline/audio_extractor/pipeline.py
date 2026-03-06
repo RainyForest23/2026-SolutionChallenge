@@ -7,24 +7,15 @@ import tempfile
 import librosa
 import numpy as np
 
-# ==========================================
-# 🚀 Task 26: Layer 1 - 오디오 피처 추출 파이프라인
-# ==========================================
-
 class AudioFeatureExtractor:
     def __init__(self, segment_duration=10.0, sr=22050):
         self.segment_duration = segment_duration
         self.sr = sr
 
     def extract_audio_from_video(self, video_path: str) -> str:
-        """
-        ffmpeg를 사용하여 영상 파일에서 오디오(wav)를 추출하여 임시 파일로 저장합니다.
-        """
         temp_dir = tempfile.gettempdir()
         base_name = os.path.basename(video_path).split('.')[0]
         temp_audio_path = os.path.join(temp_dir, f"{base_name}_extracted.wav")
-
-        print(f"🎬 영상에서 오디오 추출 중: {video_path} -> {temp_audio_path}")
         command = [
             "ffmpeg",
             "-y",  # 덮어쓰기 허용
@@ -40,14 +31,11 @@ class AudioFeatureExtractor:
             subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return temp_audio_path
         except subprocess.CalledProcessError as e:
-            print(f"❌ ffmpeg 오디오 추출 실패: {e}")
-            raise RuntimeError("오디오 추출에 실패했습니다. 시스템에 ffmpeg가 설치되어 있는지 확인하세요.")
+            print(f"ffmpeg 오디오 추출 실패: {e}")
+            raise RuntimeError("오디오 추출에 실패.")
 
     def analyze_audio(self, audio_path: str) -> dict:
-        """
-        librosa를 사용하여 오디오 파일을 구간별로 쪼개고 피처를 분석합니다.
-        """
-        print(f"🎧 오디오 분석 중... '{audio_path}'")
+        print(f"오디오 분석 중: '{audio_path}'")
         y, sr = librosa.load(audio_path, sr=self.sr)
         
         total_duration = librosa.get_duration(y=y, sr=sr)
@@ -131,7 +119,7 @@ class AudioFeatureExtractor:
             if output_json_path:
                 with open(output_json_path, 'w', encoding='utf-8') as f:
                     f.write(json_output)
-                print(f"✅ 결과가 성공적으로 저장되었습니다: {output_json_path}")
+                print(f"결과 저장: {output_json_path}")
             
             return json_output
             
@@ -149,7 +137,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if not os.path.exists(args.input_file):
-        print(f"❌ 입력 파일이 존재하지 않습니다: {args.input_file}")
+        print(f"입력 파일 없음: {args.input_file}")
         sys.exit(1)
         
     extractor = AudioFeatureExtractor(segment_duration=args.segment_duration)

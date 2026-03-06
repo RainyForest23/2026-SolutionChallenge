@@ -2,8 +2,8 @@
 
 ## 1. GCP 프로젝트 정보
 
-- 프로젝트 이름: soundsight-dev
-- 프로젝트 ID: soundsight-dev
+- 프로젝트 이름: 2026-sc-soundsight
+- 프로젝트 ID: sc-soundsight
 - 결제 플랜: Blaze (무료 크레딧 사용 중)
 - 기본 리전: us-central1
 
@@ -20,7 +20,7 @@
 
 ## 3. Firebase Storage 설정
 
-- 기본 버킷: soundsight-dev.firebasestorage.app
+- 기본 버킷: sc-soundsight.firebasestorage.app
 - 리전: us-central1
 - Cloud Run과 동일 리전 유지
 
@@ -31,6 +31,7 @@
 - Firestore API
 - Firebase Authentication
 - Firebase Storage
+- Vertex AI API (Gemini 모델 호출용)
 
 ---
 
@@ -43,6 +44,7 @@
 | Vertex AI 사용자 | Vertex 모델 사용 권한 |
 
 원칙:
+
 - 서비스 계정 키(JSON)는 GitHub에 업로드하지 않는다.
 - 운영 API Key는 Cloud Run 환경 변수로만 관리한다.
 
@@ -54,7 +56,13 @@
 - `.env.example`만 Git에 업로드
 - 운영 비밀값은 Cloud Run 환경 변수로 주입
 
-### 필수 환경 변수
+### 필수 환경 변수 (예시)
+
+- `GOOGLE_APPLICATION_CREDENTIALS`: GCP 서비스 계정 JSON 파일 경로 (Backend)
+- `FIREBASE_API_KEY`: Firebase 설정용 Web API Key (Frontend/Backend)
+- `FIREBASE_AUTH_DOMAIN`: sc-soundsight.firebaseapp.com
+- `FIREBASE_PROJECT_ID`: sc-soundsight
+- `FIREBASE_STORAGE_BUCKET`: sc-soundsight.firebasestorage.app
 
 ---
 

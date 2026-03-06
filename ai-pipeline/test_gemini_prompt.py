@@ -3,32 +3,23 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, Part
 import json
 
-# ==========================================
-# 🚀 Task 9: Gemini 프로 프롬프트 기반 감정 분석 PoC 
-# ==========================================
 
-# TODO: 우림님의 GCP 프로젝트 ID와 리전으로 수정 필요
 PROJECT_ID = "sc-soundsight"  
 LOCATION = "us-central1"            
-
-# 모델 설정 (가장 최신/강력한 모델 사용 권장)
 MODEL_ID = "gemini-2.5-pro" 
 
 def init_vertex_ai():
     """Vertex AI 환경 초기화 (서비스 계정 JSON 인증)"""
-    # 환경변수에 서비스 계정 키 경로가 설정되어 있는지 확인
     if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-        print("⚠️ 경고: GOOGLE_APPLICATION_CREDENTIALS 환경 변수가 설정되지 않았습니다.")
-        print("터미널에서 다음 명령어를 실행하여 서비스 계정 키 경로를 지정하세요:")
-        print("export GOOGLE_APPLICATION_CREDENTIALS='/path/to/your/service-account-key.json'")
+        print("경고: GOOGLE_APPLICATION_CREDENTIALS 환경 변수 설정되지 않음.")
         return False
         
     try:
         vertexai.init(project=PROJECT_ID, location=LOCATION)
-        print(f"✅ Vertex AI 초기화 완료 (프로젝트: {PROJECT_ID}, 리전: {LOCATION})")
+        print(f"Vertex AI 초기화 완료 (프로젝트: {PROJECT_ID}, 리전: {LOCATION})")
         return True
     except Exception as e:
-        print(f"❌ Vertex AI 초기화 실패: {e}")
+        print(f"Vertex AI 초기화 실패: {e}")
         return False
 
 def generate_emotion_timeline(video_path: str, audio_features: dict = None) -> str:
@@ -38,9 +29,6 @@ def generate_emotion_timeline(video_path: str, audio_features: dict = None) -> s
     """
     model = GenerativeModel(MODEL_ID)
     
-    # -------------------------------------------------------------
-    # 🎯 핵심 프롬프트 (Task 7 감정 표현 설계서 기반)
-    # -------------------------------------------------------------
     system_instruction = """
     당신은 영상과 오디오를 분석하여 시청자가 느끼는 감정과 분위기 변화를 시간 단위로 추출하는 '시네마틱 감정 분석 AI'입니다.
     청각장애인(DHH)이 영상의 분위기와 소리 효과를 시각적으로 체감할 수 있도록, 
@@ -82,7 +70,7 @@ def generate_emotion_timeline(video_path: str, audio_features: dict = None) -> s
     if audio_features:
         user_prompt += f"\n[참조용 오디오 분석 데이터(librosa 추출)]\n{json.dumps(audio_features, ensure_ascii=False, indent=2)}"
 
-    print("🤖 Gemini 모델 분석 요청 중 (수 십초 가량 소요될 수 있습니다)...")
+    print("Gemini 모델 분석 요청 중 (수 십초 가량 소요될 수 있습니다)...")
     
     try:
         # TODO: 실제 영상 파일을 업로드하고 Part 객체로 생성하는 로직 필요.
@@ -101,11 +89,11 @@ def generate_emotion_timeline(video_path: str, audio_features: dict = None) -> s
         )
         return response.text
     except Exception as e:
-        return f"❌ 오류 발생: {e}"
+        return f"오류 발생: {e}"
 
 if __name__ == "__main__":
     print("-" * 50)
-    print("🎬 Gemini 감정 타임라인 추출 PoC 테스트 스크립트")
+    print("Gemini 감정 타임라인 추출 PoC - TEST")
     print("-" * 50)
     
     if init_vertex_ai():
@@ -120,5 +108,4 @@ if __name__ == "__main__":
         print("\n[Gemini 분석 결과]")
         print(result_json)
         
-        print("\n💡 실행 안내:")
-        print("로컬 테스트 코드 실행이 성공적으로 완료되었습니다.")
+        print("\n PoC 테스트 코드 실행이 성공적으로 완료되었습니다.")
