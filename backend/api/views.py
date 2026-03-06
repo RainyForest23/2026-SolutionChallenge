@@ -17,6 +17,7 @@ from firestore_service.services.user_service import UserService
 from firestore_service.services.video_service import VideoService, BadRequestError as VideoBadRequestError, ConflictError as VideoConflictError, NotFoundError as VideoNotFoundError
 from firestore_service.services.job_service import JobService, BadRequestError as JobBadRequestError, NotFoundError as JobNotFoundError
 from firestore_service.services.analysis_result_service import AnalysisResultService, BadRequestError as ResultBadRequestError, NotFoundError as ResultNotFoundError
+from firestore_service.services.storage_service import StorageService, BadRequestError as StorageBadRequestError, StorageUploadError, StorageReadError
 
 from .serializers import (
     AnalyzeRequestSerializer,
@@ -42,12 +43,13 @@ user_service = UserService(user_repo)
 video_service = VideoService(video_repo)
 job_service = JobService(job_repo, video_repo)
 analysis_result_service = AnalysisResultService(analysis_result_repo)
+storage_service = StorageService()
 
 def _forbidden() -> Response:
     return Response({"detail": "Forbidden"}, status=drf_status.HTTP_403_FORBIDDEN)
 
 def _handle_service_error(exc: Exception) -> Response:
-    if isinstance(exc, (VideoBadRequestError, JobBadRequestError, ResultBadRequestError)):
+    if isinstance(exc, (VideoBadRequestError, JobBadRequestError, ResultBadRequestError, StorageBadRequestError)):
         detail = exc.args[0] if exc.args else "Bad request"
         if isinstance(detail, dict):
             raise ValidationError(detail)
@@ -210,7 +212,13 @@ def result(request):
         # Firestore stores only resultPath, not the actual timeline JSON body.
         # For now, if pipeline saved parsed result in Firestore-compatible field, use it.
         # Later this should download/read the JSON file from Firebase Storage.
-        result_body = latest_result.get("result")
+        result_path = latest_result.get("resultPath")
+        if not result_path:
+            raise Http404("Result path not found")
+        
+        # 결과 json 파일
+        result_body = storage_service.read_json(result_path)
+
         if result_body is None:
             result_body = {
                 "videoUrl": "",
