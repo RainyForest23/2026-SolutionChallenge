@@ -8,11 +8,11 @@ import json
 # ==========================================
 
 # TODO: 우림님의 GCP 프로젝트 ID와 리전으로 수정 필요
-PROJECT_ID = "YOUR_GCP_PROJECT_ID"  
+PROJECT_ID = "sc-soundsight"  
 LOCATION = "us-central1"            
 
 # 모델 설정 (가장 최신/강력한 모델 사용 권장)
-MODEL_ID = "gemini-1.5-pro-preview-0409" 
+MODEL_ID = "gemini-2.5-pro" 
 
 def init_vertex_ai():
     """Vertex AI 환경 초기화 (서비스 계정 JSON 인증)"""
@@ -116,13 +116,9 @@ if __name__ == "__main__":
             "average_frequency": "high"
         }
         
-        # 임시 실행 주석 처리 (프로젝트 ID 등 정보가 필요하므로)
-        # result_json = generate_emotion_timeline("dummy_path", dummy_audio_features)
-        # print("\n[Gemini 분석 결과]")
-        # print(result_json)
+        result_json = generate_emotion_timeline("dummy_path", dummy_audio_features)
+        print("\n[Gemini 분석 결과]")
+        print(result_json)
         
         print("\n💡 실행 안내:")
-        print("1. 파일 상단의 PROJECT_ID를 GCP 프로젝트 ID로 수정하세요.")
-        print("2. 터미널에서 `export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json` 을 실행하세요.")
-        print("3. 코드를 수정하여 실제 비디오 파일 경로를 전달하거나 텍스트 프롬프트만으로 테스트하세요.")
-        print("   (주석 처리된 실행 코드를 해제하세요.)")
+        print("로컬 테스트 코드 실행이 성공적으로 완료되었습니다.")
