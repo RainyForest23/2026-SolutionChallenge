@@ -13,7 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY ai-pipeline/requirements.txt /app/ai-requirements.txt
+
+RUN pip install --upgrade pip \
+    && pip install -r /app/requirements.txt \
+    && pip install -r /app/ai-requirements.txt
 
 # Copy project files
 COPY . /app
