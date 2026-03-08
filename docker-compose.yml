@@ -1,15 +1,18 @@
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8080:8080"
     volumes:
       - ./backend:/app
       - ./ai-pipeline:/app/ai-pipeline
+      - ./secret:/app/secret
     env_file:
       - ./backend/.env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/secret/serviceAccountKey.json 
     depends_on:
       - redis
 
@@ -21,14 +24,17 @@ services:
   # Celery worker (비동기 AI 파이프라인 처리)
   celery:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     command: celery -A config worker -l info
     volumes:
       - ./backend:/app
       - ./ai-pipeline:/app/ai-pipeline
+      - ./secret:/app/secret
     env_file:
       - ./backend/.env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/secret/serviceAccountKey.json  
     depends_on:
       - redis
       - backend

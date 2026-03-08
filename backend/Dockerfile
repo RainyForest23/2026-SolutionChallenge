@@ -12,14 +12,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY backend/requirements.txt /app/requirements.txt
+COPY ai-pipeline/requirements.txt /app/ai-requirements.txt
+
+RUN pip install --upgrade pip \
+    && pip install -r /app/requirements.txt \
+    && pip install -r /app/ai-requirements.txt
 
 # Copy project files
-COPY . /app
+COPY backend /app
+COPY ai-pipeline /app/ai-pipeline
 
 # entrypoint script will migrate & collectstatic
-COPY entrypoint.sh /entrypoint.sh
+COPY backend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # expose Django port
