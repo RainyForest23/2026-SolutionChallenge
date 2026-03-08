@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 from firebase_admin import storage
 from ..storage_paths import video_object_path
 import os
+from ..firebase_app import get_firebase_app
 
 class StorageUploadError(Exception):
     pass
@@ -17,6 +18,7 @@ class StorageReadError(Exception):
 class StorageService:
 
     def __init__(self, bucket_name: Optional[str] = None):
+        get_firebase_app()  
         self.bucket = storage.bucket(bucket_name) if bucket_name else storage.bucket()
 
     def upload_file_to_storage(
