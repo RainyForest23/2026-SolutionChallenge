@@ -73,7 +73,7 @@ from rest_framework.permissions import IsAuthenticated
 
 @api_view(["POST"])
 def some_view(request):
-    uid = request.user
+    uid = request.user.uid
     decoded_token = request.auth   # 필요할 때만 사용
     ...
 ```
