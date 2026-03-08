@@ -7,6 +7,18 @@ from django.http import HttpRequest
 # 기존에 만든 helper 재사용
 from firestore_service.auth_helper import get_bearer_token, verify_id_token
 
+class FirebaseUser:
+    def __init__(self, uid: str, decoded: dict):
+        self.uid = uid
+        self.decoded = decoded
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    def __str__(self) -> str:
+        return self.uid
+
 
 class FirebaseAuthentication(BaseAuthentication):
     """
@@ -35,6 +47,8 @@ class FirebaseAuthentication(BaseAuthentication):
         uid = decoded.get("uid")
         if not uid:
             raise AuthenticationFailed("Token has no uid")
+        
+        user = FirebaseUser(uid=uid, decoded=decoded)
 
         # DRF가 request.user / request.auth를 채움
-        return (uid, decoded)
+        return (user, decoded)
