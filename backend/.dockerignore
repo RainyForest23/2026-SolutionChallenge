@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+.venv/
+.env
+secret/
+*.json
+
+.git/
+.idea/
+.vscode/
