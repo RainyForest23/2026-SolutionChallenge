@@ -1,7 +1,10 @@
 import json
+import logging
 from pathlib import Path
 
 from celery import shared_task
+
+from audio_pipeline.pipeline import run_audio_pipeline
 
 from firestore_service.repositories.video_repo import VideoRepository
 from firestore_service.repositories.job_repo import JobRepository
@@ -12,6 +15,10 @@ from firestore_service.services.job_service import JobService
 from firestore_service.services.analysis_result_service import AnalysisResultService
 from firestore_service.services.storage_service import StorageService
 
+from audio_pipeline.pipeline import run_audio_pipeline
+
+
+logger = logging.getLogger(__name__)
 
 video_repo = VideoRepository()
 job_repo = JobRepository()
@@ -39,8 +46,9 @@ def analyze_video_task(
 
     Current behavior:
     - updates job status
+    - runs audio pipeline for YouTube input
     - creates analysis_result metadata
-    - writes a dummy result JSON
+    - writes a temporary result JSON
     - uploads it to Firebase Storage
     - marks job as done
 
@@ -48,10 +56,28 @@ def analyze_video_task(
     audio_pipeline -> AI feature extractor -> Gemini -> result.json
     """
     try:
-        # 1) job: queued -> processing
-        job_service.update_status(uid, job_id, "processing")
+        if not youtube_url:
+            raise ValueError("youtube_url is required for current pipeline")
 
-        # 2) create result metadata in Firestore
+        # 1) queued -> downloading
+        job_service.update_status(uid, job_id, "downloading")
+        logger.info("Job %s: downloading stage started", job_id)
+
+        # Real audio pipeline connection
+        pipeline_output = run_audio_pipeline(
+            youtube_url=youtube_url,
+            workdir="/tmp/soundsight",
+            job_id=job_id,
+            segment_sec=10,
+        )
+
+        logger.info("Job %s: audio pipeline finished: %s", job_id, pipeline_output)
+
+        # 2) downloading -> uploading
+        job_service.update_status(uid, job_id, "uploading")
+        logger.info("Job %s: uploading stage started", job_id)
+
+        # create result metadata in Firestore
         result_meta = analysis_result_service.create_result(
             uid=uid,
             video_id=video_id,
@@ -59,57 +85,58 @@ def analyze_video_task(
         )
         result_id = result_meta["resultId"]
 
-        # 3) get resultPath from Firestore
+        # get resultPath from Firestore
         result_path = analysis_result_service.get_result_path(uid, video_id, result_id)
 
-        # 4) make local temp folder
+        # make local temp folder
         job_dir = Path("/tmp/soundsight") / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
 
         local_result_json_path = job_dir / "emotion_timeline.json"
 
-        # 5) create a dummy result body for now
-        dummy_result = {
+        # Temporary result body using real pipeline output
+        result_body = {
             "schemaVersion": "1.0.0",
-            "videoUrl": "",
-            "base_moods": [
-                {
-                    "label": "warmth",
-                    "intensity": 0.6,
-                    "start": 0.0,
-                    "end": 10.0,
-                }
-            ],
-            "events": [
-                {
-                    "type": "swell",
-                    "trigger_time": 5.0,
-                    "duration": 2.0,
-                    "strength": 0.7,
-                }
-            ],
+            "videoUrl": youtube_url,
+            "pipeline": {
+                "audio_path": pipeline_output.get("audio_path"),
+                "wav_path": pipeline_output.get("wav_path"),
+                "segments_dir": pipeline_output.get("segments_dir"),
+                "segment_paths": pipeline_output.get("segment_paths", []),
+                "duration_sec": pipeline_output.get("duration_sec"),
+            },
+            "base_moods": [],
+            "events": [],
         }
 
         with local_result_json_path.open("w", encoding="utf-8") as f:
-            json.dump(dummy_result, f, ensure_ascii=False, indent=2)
+            json.dump(result_body, f, ensure_ascii=False, indent=2)
 
-        # 6) upload dummy result JSON to Firebase Storage
         storage_service.upload_file_to_storage(
             local_path=str(local_result_json_path),
             dest_path=result_path,
             content_type="application/json",
         )
 
-        # 7) mark job done
+        logger.info("Job %s: result uploaded to %s", job_id, result_path)
+
+        # 3) uploading -> processing
+        job_service.update_status(uid, job_id, "processing")
+        logger.info("Job %s: processing stage completed", job_id)
+
+        # 4) processing -> done
         job_service.update_status(uid, job_id, "done")
+        logger.info("Job %s: done", job_id)
 
         return {
             "jobId": job_id,
             "videoId": video_id,
             "resultId": result_id,
             "resultPath": result_path,
+            "pipelineOutput": pipeline_output,
         }
 
     except Exception as e:
+        logger.exception("Job %s failed", job_id)
         job_service.fail_job(uid, job_id, str(e))
         raise

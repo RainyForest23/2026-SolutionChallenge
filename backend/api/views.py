@@ -91,13 +91,30 @@ def analyze(request):
     try:
         # current architecture is video-first, then job
         if youtube_url:
-            video = video_service.create_video(
-                uid=uid,
-                title=title,
-                youtube_url=youtube_url,
-                duration_sec=None,
-            )
-            video_id = video["videoId"]
+            existing_video = video_service.get_video_by_youtube_url(uid, youtube_url)
+
+            if existing_video:
+                video_id = existing_video["videoId"]
+
+                active_job = job_service.get_active_job_by_video(uid, video_id)
+                if active_job:
+                    return Response(
+                        {
+                            "detail": f"이미 처리 중인 작업이 있습니다. jobId={active_job.get('jobId')}"
+                        },
+                        status=drf_status.HTTP_409_CONFLICT,
+                    )
+
+                # if latest_job is failed or done, allow new job creation
+                # if latest_job is None, also allow
+            else:
+                video = video_service.create_video(
+                    uid=uid,
+                    title=title,
+                    youtube_url=youtube_url,
+                    duration_sec=None,
+                )
+                video_id = video["videoId"]
         else:
             # upload_id flow is not fully designed in current service layer yet
             return Response(
