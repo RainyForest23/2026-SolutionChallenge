@@ -102,7 +102,8 @@ class JobService:
         # video currentStatus 동기화
         video_id = job.get("videoId")
         if video_id:
-            video_status = self.video_repo.get_video("currentStatus")
+            video = self.video_repo.get_video(uid, video_id)
+            video_status = video.get("currentStatus") if video else None    
 
             # 앞으로 가는 전이만 허용, 뒤로 가는 업데이트는 무시
             if new_status == "failed" or new_status in ALLOWED_NEXT.get(video_status, set()):
