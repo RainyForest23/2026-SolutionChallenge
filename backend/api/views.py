@@ -8,7 +8,6 @@ from rest_framework.response import Response
 from rest_framework import status as drf_status
 from rest_framework.exceptions import ValidationError, NotAuthenticated
 
-from firestore_service.auth_helper import authenticate_request
 from firestore_service.repositories.user_repo import UserRepository
 from firestore_service.repositories.video_repo import VideoRepository
 from firestore_service.repositories.job_repo import JobRepository
@@ -71,7 +70,8 @@ def analyze(request):
     Create video + create job + enqueue background pipeline.
     Owner-only API.
     """
-    uid, decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     # create/update users/{uid}
     try:
@@ -164,7 +164,8 @@ def status(request):
     GET /api/status?job_id=...
     Returns current processing status for the owner's job.
     """
-    uid, _decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     job_id = request.query_params.get("job_id")
     if not job_id:
@@ -197,7 +198,8 @@ def result(request):
     Result body is expected to come from result JSON in Storage,
     while Firestore stores only the metadata/path.
     """
-    uid, _decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     job_id = request.query_params.get("job_id")
     if not job_id:
@@ -260,7 +262,8 @@ def result(request):
 # Auth 연동 확인 엔드포인트
 @api_view(["GET"])
 def me(request):
-    uid, decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     return Response({
         "uid": uid,
