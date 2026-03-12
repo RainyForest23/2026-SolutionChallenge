@@ -19,6 +19,7 @@ from firestore_service.services.storage_service import StorageService
 sys.path.append(str(Path(__file__).resolve().parents[1] / "ai-pipeline"))
 
 from audio_extractor.pipeline import AudioFeatureExtractor
+from .gemini_adapter import call_gemini_timeline
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,42 @@ def convert_audio_features_to_result(video_url: str, audio_features: dict):
         "events": events,
     }
 
+def normalize_gemini_timeline(video_url: str, gemini_timeline: list[dict]) -> dict:
+    base_moods = []
+    events = []
+
+    for item in gemini_timeline:
+        start = float(item.get("start_time", 0.0))
+        end = float(item.get("end_time", 0.0))
+        base_mood = item.get("base_mood", "unknown")
+        dynamic_event = item.get("dynamic_event", "stable")
+        intensity = float(item.get("intensity", 0.5))
+
+        base_moods.append(
+            {
+                "label": base_mood,
+                "intensity": max(0.0, min(1.0, intensity)),
+                "start": start,
+                "end": end,
+            }
+        )
+
+        if dynamic_event != "stable":
+            events.append(
+                {
+                    "type": dynamic_event,
+                    "trigger_time": start,
+                    "duration": round(end - start, 2),
+                    "strength": max(0.0, min(1.0, intensity)),
+                }
+            )
+
+    return {
+        "videoUrl": video_url,
+        "base_moods": base_moods,
+        "events": events,
+    }
+
 @shared_task(bind=True)
 def analyze_video_task(
     self,
@@ -145,17 +182,6 @@ def analyze_video_task(
         job_service.update_status(uid, job_id, "uploading")
         logger.info("Job %s: uploading stage started", job_id)
 
-        # create result metadata in Firestore
-        result_meta = analysis_result_service.create_result(
-            uid=uid,
-            video_id=video_id,
-            subtitle_source="gemini",
-        )
-        result_id = result_meta["resultId"]
-
-        # get resultPath from Firestore
-        result_path = analysis_result_service.get_result_path(uid, video_id, result_id)
-
         # make local temp folder
         job_dir = Path("/tmp/soundsight") / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
@@ -169,11 +195,31 @@ def analyze_video_task(
             output_json_path=str(job_dir / "audio_features.json"),
         )
         audio_features = json.loads(audio_features_json_str)
-        # Temporary result body using real pipeline output
-        result_payload = convert_audio_features_to_result(
-            video_url=youtube_url,
-            audio_features=audio_features,
+
+        try:
+            gemini_timeline = call_gemini_timeline(audio_features=audio_features)
+            result_payload = normalize_gemini_timeline(
+                video_url=youtube_url,
+                gemini_timeline=gemini_timeline,
+            )
+            subtitle_source = "gemini"
+        except Exception:
+            logger.exception("Gemini failed, fallback to rule-based conversion")
+            result_payload = convert_audio_features_to_result(
+                video_url=youtube_url,
+                audio_features=audio_features,
+            )
+            subtitle_source = "rule-based"
+
+                # create result metadata in Firestore
+        result_meta = analysis_result_service.create_result(
+            uid=uid,
+            video_id=video_id,
+            subtitle_source=subtitle_source,
         )
+        result_id = result_meta["resultId"]
+        # get resultPath from Firestore
+        result_path = analysis_result_service.get_result_path(uid, video_id, result_id)
 
         result_body = {
             "schemaVersion": "1.0.0",
