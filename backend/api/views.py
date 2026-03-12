@@ -190,6 +190,69 @@ def status(request):
     except Exception as exc:
         return _handle_service_error(exc)
 
+def _normalize_result_body(result_body: dict) -> dict:
+    """
+    Convert stored pipeline JSON into the API response shape:
+    {
+        "videoUrl": str,
+        "base_moods": list,
+        "events": list,
+    }
+    """
+    if not isinstance(result_body, dict):
+        return {
+            "videoUrl": "",
+            "base_moods": [],
+            "events": [],
+        }
+
+    # already in desired shape
+    if (
+        "videoUrl" in result_body
+        and "base_moods" in result_body
+        and "events" in result_body
+    ):
+        return {
+            "videoUrl": result_body.get("videoUrl", ""),
+            "base_moods": result_body.get("base_moods", []) or [],
+            "events": result_body.get("events", []) or [],
+        }
+
+    # fallback: old structure
+    video_url = result_body.get("videoUrl", "")
+    timeline = result_body.get("timeline", []) or []
+
+    base_moods = []
+    events = []
+
+    for item in timeline:
+        if not isinstance(item, dict):
+            continue
+
+        base = item.get("base_mood")
+        if isinstance(base, dict):
+            base_moods.append({
+                "start": item.get("t_start"),
+                "end": item.get("t_end"),
+                "label": base.get("label"),
+                "intensity": base.get("intensity"),
+            })
+
+        event = item.get("dynamic_event")
+        if isinstance(event, dict):
+            events.append({
+                "label": event.get("label"),
+                "trigger_time": event.get("trigger_time"),
+                "duration": event.get("duration"),
+                "strength": event.get("strength"),
+            })
+
+    return {
+        "videoUrl": video_url,
+        "base_moods": base_moods,
+        "events": events,
+    }
+
 @api_view(["GET"])
 def result(request):
     """
@@ -236,14 +299,8 @@ def result(request):
             raise Http404("Result path not found")
         
         # 결과 json 파일
-        result_body = storage_service.read_json(result_path)
-
-        if result_body is None:
-            result_body = {
-                "videoUrl": "",
-                "base_moods": [],
-                "events": [],
-            }
+        raw_result_body = storage_service.read_json(result_path)
+        result_body = _normalize_result_body(raw_result_body)   
 
         resp_data = ResultResponseSerializer(
             {

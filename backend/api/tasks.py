@@ -31,6 +31,72 @@ job_service = JobService(job_repo, video_repo)
 analysis_result_service = AnalysisResultService(analysis_result_repo)
 storage_service = StorageService()
 
+def convert_audio_features_to_result(video_url: str, audio_features: dict):
+    base_moods = []
+    events = []
+
+    segments = audio_features.get("segments", [])
+
+    for seg in segments:
+        start = seg["start_time_sec"]
+        end = seg["end_time_sec"]
+        feats = seg["features"]
+
+        energy = feats.get("mean_energy", 0)
+        tempo = feats.get("tempo_bpm", 0)
+        event_count = feats.get("event_count", 0)
+
+        if energy >= 0.12:
+            label = "tension"
+            intensity = min(1.0, round(energy * 4, 2))
+
+        elif tempo >= 125:
+            label = "uplift"
+            intensity = 0.65
+
+        elif energy <= 0.02:
+            label = "sorrow"
+            intensity = 0.35
+
+        else:
+            label = "warmth"
+            intensity = 0.45
+
+        base_moods.append(
+            {
+                "label": label,
+                "intensity": intensity,
+                "start": start,
+                "end": end,
+            }
+        )
+
+        # ---- event rule ----
+        if event_count >= 50:
+            events.append(
+                {
+                    "type": "swell",
+                    "trigger_time": start,
+                    "duration": end - start,
+                    "strength": min(1.0, round(event_count / 80, 2)),
+                }
+            )
+
+        elif energy <= 0.01 and event_count <= 3:
+            events.append(
+                {
+                    "type": "sudden_drop",
+                    "trigger_time": start,
+                    "duration": end - start,
+                    "strength": 0.5,
+                }
+            )
+
+    return {
+        "videoUrl": video_url,
+        "base_moods": base_moods,
+        "events": events,
+    }
 
 @shared_task(bind=True)
 def analyze_video_task(
@@ -104,6 +170,11 @@ def analyze_video_task(
         )
         audio_features = json.loads(audio_features_json_str)
         # Temporary result body using real pipeline output
+        result_payload = convert_audio_features_to_result(
+            video_url=youtube_url,
+            audio_features=audio_features,
+        )
+
         result_body = {
             "schemaVersion": "1.0.0",
             "videoUrl": youtube_url,
@@ -115,8 +186,8 @@ def analyze_video_task(
                 "duration_sec": pipeline_output.get("duration_sec"),
             },
             "audio_features": audio_features,
-            "base_moods": [],
-            "events": [],
+            "base_moods": result_payload["base_moods"],
+            "events": result_payload["events"],
         }
 
         with local_result_json_path.open("w", encoding="utf-8") as f:
