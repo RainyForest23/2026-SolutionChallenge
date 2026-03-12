@@ -1,9 +1,9 @@
 import json
 import logging
+import sys
 from pathlib import Path
 
 from celery import shared_task
-
 from audio_pipeline.pipeline import run_audio_pipeline
 
 from firestore_service.repositories.video_repo import VideoRepository
@@ -15,8 +15,10 @@ from firestore_service.services.job_service import JobService
 from firestore_service.services.analysis_result_service import AnalysisResultService
 from firestore_service.services.storage_service import StorageService
 
-from audio_pipeline.pipeline import run_audio_pipeline
+# add ai-pipeline folder to Python path
+sys.path.append(str(Path(__file__).resolve().parents[1] / "ai-pipeline"))
 
+from audio_extractor.pipeline import AudioFeatureExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -94,17 +96,25 @@ def analyze_video_task(
 
         local_result_json_path = job_dir / "emotion_timeline.json"
 
+        wav_path = pipeline_output["wav_path"]
+        extractor = AudioFeatureExtractor(segment_duration=10.0, sr=22050)
+        audio_features_json_str = extractor.process(
+            input_path=wav_path,
+            output_json_path=str(job_dir / "audio_features.json"),
+        )
+        audio_features = json.loads(audio_features_json_str)
         # Temporary result body using real pipeline output
         result_body = {
             "schemaVersion": "1.0.0",
             "videoUrl": youtube_url,
             "pipeline": {
                 "audio_path": pipeline_output.get("audio_path"),
-                "wav_path": pipeline_output.get("wav_path"),
+                "wav_path": wav_path,
                 "segments_dir": pipeline_output.get("segments_dir"),
                 "segment_paths": pipeline_output.get("segment_paths", []),
                 "duration_sec": pipeline_output.get("duration_sec"),
             },
+            "audio_features": audio_features,
             "base_moods": [],
             "events": [],
         }

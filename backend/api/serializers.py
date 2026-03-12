@@ -79,4 +79,4 @@ class ResultResponseSerializer(serializers.Serializer):
     job_id = serializers.CharField()
     video_id = serializers.CharField(required=False)
     status = serializers.CharField()
-    result = ResultPayloadSerializer(required=False, allow_null=True)
+    result = serializers.JSONField(required=False, allow_null=True)
