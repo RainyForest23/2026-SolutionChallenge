@@ -38,7 +38,6 @@ async function setNavBar(visible: boolean) {
   if (Platform.OS === 'android') {
     try {
       if (visible) {
-        // 터치 시 nav bar가 뜨도록 behavior 먼저 설정 후 표시 (가로 모드 대응)
         await NavigationBar.setBehaviorAsync('inset-touch');
         await NavigationBar.setVisibilityAsync('visible');
       } else {
@@ -79,7 +78,6 @@ export default function VideoScreen() {
 
   const progress = duration > 0 ? currentTime / duration : 0;
 
-  // 컨트롤 자동 숨김 타이머
   const startHideTimer = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => setShowControls(false), 4000);
@@ -90,7 +88,6 @@ export default function VideoScreen() {
     startHideTimer();
   }, [startHideTimer]);
 
-  // 기기 방향에 따라 자동으로 가로/세로 감지
   useEffect(() => {
     ScreenOrientation.unlockAsync();
 
@@ -109,7 +106,6 @@ export default function VideoScreen() {
     };
   }, []);
 
-  // 가로/세로 상관없이 컨트롤 표시 여부와 네비게이션 바 동기화
   useEffect(() => {
     setNavBar(showControls);
   }, [showControls]);
@@ -133,7 +129,6 @@ export default function VideoScreen() {
   };
 
   const handleEnd = async () => {
-    // 영상 종료 시 세로 고정 후 피드백
     await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     await setNavBar(true);
     setStep('initial');
@@ -203,7 +198,6 @@ export default function VideoScreen() {
           controls={false}
           useTextureView
         />
-        {/* 비디오가 터치를 삼키는 것을 막기 위한 투명 오버레이 */}
         <Pressable style={StyleSheet.absoluteFill} onPress={handleVideoTap} />
       </View>
 
@@ -271,8 +265,7 @@ export default function VideoScreen() {
                 <Text style={styles.skipLabel}>10</Text>
               </TouchableOpacity>
 
-              {/* 가로/세로는 기기 방향에 따라 자동 — 빈 자리 균형용 */}
-              <View style={styles.sideBtn} />
+                <View style={styles.sideBtn} />
             </View>
           </View>
         </View>
@@ -395,7 +388,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
 
-  /* ─── 컨트롤 ─── */
   controlsLayer: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
@@ -408,7 +400,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
-  /* Seek bar */
   seekRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -459,7 +450,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  /* 버튼 행 */
   buttonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -485,7 +475,7 @@ const styles = StyleSheet.create({
   pauseIcon: {
     fontSize: 20,
     color: '#FFFFFF',
-    marginLeft: 3,       // ▶ 문자 시각적 오프셋 보정
+    marginLeft: 3,
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
@@ -526,7 +516,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  /* ─── Feedback ─── */
   overlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',

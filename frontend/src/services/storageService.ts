@@ -2,13 +2,11 @@ import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from './firebase';
 import { EmotionTimeline } from '../domain/emotionTypes';
 
-// Firebase Storage 경로 → 다운로드 URL
 export async function getStorageDownloadUrl(storagePath: string): Promise<string> {
   const storageRef = ref(storage, storagePath);
   return await getDownloadURL(storageRef);
 }
 
-// result.json 다운로드 → EmotionTimeline 파싱
 export async function fetchEmotionTimeline(resultPath: string): Promise<EmotionTimeline> {
   const url = await getStorageDownloadUrl(resultPath);
   const res = await fetch(url);

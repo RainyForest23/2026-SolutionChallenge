@@ -8,7 +8,7 @@ import { setAnalysisResult } from '../store/resultStore';
 const { width, height } = Dimensions.get('window');
 const HEART_SIZE = width * 0.55;
 const WAVE_SIZE = width * 0.54;
-const POLL_INTERVAL_MS = 3000; // 3초마다 폴링
+const POLL_INTERVAL_MS = 3000;
 
 const STATUS_PROGRESS: Record<JobStatus, number> = {
   queued:      10,
@@ -36,7 +36,6 @@ export default function LoadingScreen() {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // 심장 박동 애니메이션
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -65,10 +64,8 @@ export default function LoadingScreen() {
 
     const run = async () => {
       try {
-        // 1. POST /api/analyze → job_id 받기
         const { job_id } = await requestAnalysis(url);
 
-        // 2. 3초마다 GET /api/status 폴링
         pollTimerRef.current = setInterval(async () => {
           if (navigatedRef.current) return;
 
@@ -88,10 +85,7 @@ export default function LoadingScreen() {
               navigatedRef.current = true;
               stopPolling();
 
-              // 3. GET /api/result → EmotionTimeline JSON
               const timeline = await getResultFromApi(job_id);
-
-              // 4. 저장 후 VideoScreen으로 이동
               setAnalysisResult({ timeline, videoUrl: timeline.videoUrl });
               router.replace('/video' as any);
             }

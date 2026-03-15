@@ -1,7 +1,6 @@
 import { getCurrentUserIdToken } from './authService';
 import { EmotionTimeline } from '../domain/emotionTypes';
 
-// ← 백엔드 노트북 IP 받으면 여기만 교체 (예: 'http://192.168.0.xx:8080')
 const BASE_URL = 'http://YOUR_BACKEND_IP:8080';
 
 export type JobStatus = 'queued' | 'downloading' | 'uploading' | 'processing' | 'done' | 'failed';
@@ -21,7 +20,6 @@ async function authHeaders(): Promise<HeadersInit> {
   };
 }
 
-// POST /api/analyze → job_id 반환
 export async function requestAnalysis(videoUrl: string): Promise<{ job_id: string; video_id: string }> {
   const res = await fetch(`${BASE_URL}/api/analyze`, {
     method: 'POST',
@@ -37,7 +35,6 @@ export async function requestAnalysis(videoUrl: string): Promise<{ job_id: strin
   return res.json();
 }
 
-// GET /api/status?job_id=XYZ → 현재 상태 반환
 export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
   const res = await fetch(`${BASE_URL}/api/status?job_id=${jobId}`, {
     headers: await authHeaders(),
@@ -51,7 +48,6 @@ export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
   return res.json();
 }
 
-// GET /api/result?job_id=XYZ → EmotionTimeline JSON 반환
 export async function getResultFromApi(jobId: string): Promise<EmotionTimeline> {
   const res = await fetch(`${BASE_URL}/api/result?job_id=${jobId}`, {
     headers: await authHeaders(),

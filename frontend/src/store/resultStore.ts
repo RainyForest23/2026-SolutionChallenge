@@ -2,7 +2,7 @@ import { EmotionTimeline } from '../domain/emotionTypes';
 
 type AnalysisResult = {
   timeline: EmotionTimeline;
-  videoUrl: string; // Firebase Storage 다운로드 URL
+  videoUrl: string;
 };
 
 let current: AnalysisResult | null = null;

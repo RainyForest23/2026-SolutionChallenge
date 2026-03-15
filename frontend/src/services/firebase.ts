@@ -4,7 +4,6 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// TODO: .env로 분리 권장 (EXPO_PUBLIC_ prefix 사용)
 const firebaseConfig = {
   apiKey: 'AIzaSyCB9s4NqkbawqKWyOBylfW_uczSwNZPVs4',
   authDomain: 'sc-soundsight.firebaseapp.com',
