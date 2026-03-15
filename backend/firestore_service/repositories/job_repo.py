@@ -2,7 +2,6 @@ from google.cloud import firestore
 from typing import Any, Dict, List, Optional
 from .repo_paths import job_doc, jobs_collection
 
-db = firestore.Client()
 
 ACTIVE_STATUSES = {"queued", "downloading", "uploading", "processing"}
 
@@ -10,6 +9,9 @@ class JobRepository:
     """
     Path: users/{uid}/jobs/{jobId}
     """
+
+    def __init__(self):
+        self.db = firestore.Client()
 
     # --------- internal helpers ---------
 
@@ -22,10 +24,10 @@ class JobRepository:
         return {field: doc_id, **(data or {})}
 
     def _doc_ref(self, uid: str, job_id: str) -> firestore.DocumentReference:
-        return db.document(job_doc(uid, job_id))
+        return self.db.document(job_doc(uid, job_id))
 
     def _col_ref(self, uid: str) -> firestore.CollectionReference:
-        return db.collection(jobs_collection(uid))
+        return self.db.collection(jobs_collection(uid))
 
     def _get_dict(self, ref: firestore.DocumentReference) -> Optional[Dict[str, Any]]:
         snap = ref.get()
