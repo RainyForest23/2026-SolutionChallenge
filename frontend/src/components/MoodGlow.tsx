@@ -11,18 +11,17 @@ export default function MoodGlow({
   color,
   intensity = 0.5,
 }: MoodGlowProps) {
-  // 투명도(알파값)는 기존 유지 (필요시 이 부분도 조정 가능)
+  // 투명도(알파값)
   const alpha = 0.002 + intensity * 0.006;
 
   const edgeColor = hexToRgba(color, alpha);
   const transparent = hexToRgba(color, 0);
 
-  // 💡 수정 포인트 1: 두께를 얇게 고정 (원하는 픽셀 크기로 조절하세요)
+  
   // 기존: 5 + intensity * 3 -> 변경: 최소 10px ~ 최대 40px 정도로 제한
   const glowThickness = 7 + (intensity * 2); 
 
-  // 💡 수정 포인트 2: locations 속성을 추가하여 가장자리에 색상을 응집시킴
-  // 0에서 시작해서 0.6(60%) 지점에서 이미 완전히 투명해지도록 설정
+  
   const gradientLocations = [0, 0.6];
 
   return (
@@ -39,7 +38,7 @@ export default function MoodGlow({
       <LinearGradient
         pointerEvents="none"
         colors={[transparent, edgeColor]}
-        // bottom은 아래에서 위로 퍼지므로 역순으로 적용된 것처럼 보임
+       
         locations={[0.4, 1]} 
         style={[styles.bottom, { height: glowThickness }]}
       />

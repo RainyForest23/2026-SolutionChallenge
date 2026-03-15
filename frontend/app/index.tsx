@@ -1,14 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-// import SplashScreen from '@/src/screens/SplashScreen';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/src/services/firebase';
 import HomeScreen from '@/src/screens/HomeScreen';
 import LoadingScreen from '@/src/screens/LoadingScreen';
 import VideoScreen from '@/src/screens/VideoScreen';
 import SettingsScreen from '@/src/screens/SettingsScreen';
 import FeedbackScreen from '@/src/screens/FeedbackScreen';
 import SplashScreen from '@/src/screens/SplashScreen';
+import LoginScreen from '@/src/screens/LoginScreen';
+import SignupScreen from '@/src/screens/SignupScreen';
 
 type Screen =
   | 'SPLASH'
+  | 'LOGIN'
+  | 'SIGNUP'
   | 'HOME'
   | 'LOADING'
   | 'VIDEO'
@@ -61,9 +66,11 @@ export default function Index() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setCurrentScreen('HOME');
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        setCurrentScreen(user ? 'HOME' : 'LOGIN');
+        unsubscribe();
+      });
     }, 1000);
-
     return () => clearTimeout(timer);
   }, []);
 
@@ -196,11 +203,30 @@ export default function Index() {
     return <SplashScreen />;
   }
 
+  if (currentScreen === 'LOGIN') {
+    return (
+      <LoginScreen
+        onLoginSuccess={() => setCurrentScreen('HOME')}
+        onPressSignUp={() => setCurrentScreen('SIGNUP')}
+      />
+    );
+  }
+
+  if (currentScreen === 'SIGNUP') {
+    return (
+      <SignupScreen
+        onSignupSuccess={() => setCurrentScreen('HOME')}
+        onPressLogin={() => setCurrentScreen('LOGIN')}
+      />
+    );
+  }
+
   if (currentScreen === 'HOME') {
     return (
       <HomeScreen
         onSubmitUrl={handleSubmitUrl}
         onPressSettings={handleOpenSettings}
+        onLogout={() => setCurrentScreen('LOGIN')}
       />
     );
   }

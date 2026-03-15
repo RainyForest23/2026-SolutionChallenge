@@ -12,11 +12,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Video from 'react-native-video';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as NavigationBar from 'expo-navigation-bar';
 import { getSettings } from '../store/settingsStore';
+import { getAnalysisResult } from '../store/resultStore';
+import { BASE_MOOD_TOKEN } from '../domain/emotionTokens';
+import { BaseMood, DynamicEvent, EmotionTimeline } from '../domain/emotionTypes';
 import MoodGlow from '../components/MoodGlow';
 import DynamicEventBar from '../components/DynamicEventBar';
 
@@ -46,9 +49,17 @@ async function setNavBar(visible: boolean) {
   }
 }
 
+function getActiveMood(timeline: EmotionTimeline, t: number): BaseMood | null {
+  return timeline.base_moods.find(m => t >= m.start && t < m.end) ?? null;
+}
+
+function getActiveEvent(timeline: EmotionTimeline, t: number): DynamicEvent | null {
+  return timeline.events.find(e => t >= e.trigger_time && t < e.trigger_time + e.duration) ?? null;
+}
+
 export default function VideoScreen() {
-  const { url } = useLocalSearchParams<{ url: string }>();
   const settings = getSettings();
+  const result = getAnalysisResult();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const DEFAULT_SHEET_H = height * 0.5;
@@ -169,7 +180,9 @@ export default function VideoScreen() {
     }
   }, [step]);
 
-  const glowColor = '#0388A6';
+  const activeMood = result?.timeline ? getActiveMood(result.timeline, currentTime) : null;
+  const activeEvent = result?.timeline ? getActiveEvent(result.timeline, currentTime) : null;
+  const glowColor = activeMood ? BASE_MOOD_TOKEN[activeMood.label].color : '#0388A6';
   const thumbLeft = `${(progress * 100).toFixed(2)}%` as any;
 
   return (
@@ -180,7 +193,7 @@ export default function VideoScreen() {
       <View style={styles.videoLayer}>
         <Video
           ref={videoRef}
-          source={{ uri: url ?? '' }}
+          source={{ uri: result?.videoUrl ?? '' }}
           style={[styles.video, { height: isFullScreen ? height : width * (9 / 16) }]}
           resizeMode="contain"
           onLoad={handleLoad}
@@ -267,7 +280,13 @@ export default function VideoScreen() {
 
       {/* Dynamic Event Bar */}
       <View pointerEvents="none" style={[styles.dynamicBarContainer, { bottom: insets.bottom }]}>
-        <DynamicEventBar baseMood="sorrow" baseMoodIntensity={0.8} eventType="stable" eventStrength={0.8} />
+        <DynamicEventBar
+          baseMood={activeMood?.label ?? 'unknown'}
+          baseMoodIntensity={activeMood?.intensity ?? 0.5}
+          eventType={activeEvent?.type ?? 'stable'}
+          eventStrength={activeEvent?.strength ?? 0.5}
+          eventDurationMs={(activeEvent?.duration ?? 2) * 1000}
+        />
       </View>
 
       {/* Feedback Overlay */}

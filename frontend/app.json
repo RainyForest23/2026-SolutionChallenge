@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SoundSight",
-    "slug": "soundsight",
+    "slug": "frontend",
     "owner": "soundsight",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -39,7 +39,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,

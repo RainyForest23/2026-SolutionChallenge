@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Dimensions,
@@ -8,12 +8,15 @@ import { router } from 'expo-router';
 import { DEFAULT_SETTINGS, setSettings } from '../store/settingsStore';
 import { ChannelSettings } from '../domain/types';
 import Toggle from '../components/Toggle';
+import { usePersistedSettings } from '../../hooks/use-persisted-settings';
 
 const { width, height } = Dimensions.get('window');
 const SHEET_HEIGHT = height * 0.95;
 const DYNAMIC_EVENT_IDS = ['sudden_shock', 'gradual_rise', 'sudden_silence'];
 
 export default function SettingsScreen() {
+  const { saved, loaded, save } = usePersistedSettings();
+
   const [settings, setLocal] = useState<ChannelSettings>({ ...DEFAULT_SETTINGS });
   const [moodIntensities, setMoodIntensities] = useState<Record<string, number>>(
     Object.fromEntries(DEFAULT_SETTINGS.baseMoods.map(m => [m.id, 50]))
@@ -22,6 +25,21 @@ export default function SettingsScreen() {
   const [eventIntensities, setEventIntensities] = useState<Record<string, number>>(
     Object.fromEntries(DYNAMIC_EVENT_IDS.map(id => [id, 50]))
   );
+
+  // 저장된 설정 불러오기
+  useEffect(() => {
+    if (!loaded) return;
+    setLocal(prev => ({
+      ...prev,
+      baseMoods: prev.baseMoods.map(m => {
+        const found = saved.baseMoods.find(s => s.id === m.id);
+        return found ? { ...m, enabled: found.enabled } : m;
+      }),
+    }));
+    setMoodIntensities(saved.moodIntensities);
+    setDynamicEnabled(saved.dynamicEnabled);
+    setEventIntensities(saved.eventIntensities);
+  }, [loaded]);
 
   const toggleMood = (id: string) => {
     setLocal(prev => ({
@@ -32,8 +50,14 @@ export default function SettingsScreen() {
     }));
   };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     setSettings(settings);
+    await save({
+      baseMoods: settings.baseMoods.map(m => ({ id: m.id, enabled: m.enabled })),
+      moodIntensities,
+      dynamicEnabled,
+      eventIntensities,
+    });
     router.back();
   };
 

@@ -40,14 +40,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  // 🌟 아이콘 영역 (중앙 고정 해제 -> 원하는 위치로 변경)
+  
   iconWrapper: {
     position: 'absolute',
     top: height * 0.2, // 화면 맨 위에서 20% 내려온 지점 (이 숫자로 조절!)
     width: '100%',
     alignItems: 'center',
   },
-  // 🌟 로고와 글자를 함께 묶어주는 영역
+  
   textLogoWrapper: {
     position: 'absolute',
     top: height * 0.65, // 화면 위에서 2/3 지점 (약 66% 위치)

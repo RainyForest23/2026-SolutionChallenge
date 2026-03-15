@@ -1,36 +1,42 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, ImageBackground, StyleSheet, Dimensions, Animated } from 'react-native';
+import { View, Text, ImageBackground, StyleSheet, Dimensions, Animated, Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import HeartProgress from '../components/HeartProgess'; // 경로 확인 필요
+import HeartProgress from '../components/HeartProgess';
+import { requestAnalysis, getJobStatus, getResultFromApi, JobStatus } from '../services/analysisService';
+import { setAnalysisResult } from '../store/resultStore';
 
 const { width, height } = Dimensions.get('window');
 const HEART_SIZE = width * 0.55;
 const WAVE_SIZE = width * 0.54;
+const POLL_INTERVAL_MS = 3000; // 3초마다 폴링
+
+const STATUS_PROGRESS: Record<JobStatus, number> = {
+  queued:      10,
+  downloading: 30,
+  uploading:   55,
+  processing:  75,
+  done:        100,
+  failed:      0,
+};
+
+const STATUS_LABEL: Record<JobStatus, string> = {
+  queued:      '분석 대기 중...',
+  downloading: '영상 다운로드 중...',
+  uploading:   '저장 중...',
+  processing:  'AI 분석 중...',
+  done:        '완료',
+  failed:      '분석 실패',
+};
 
 export default function LoadingScreen() {
   const { url } = useLocalSearchParams<{ url: string }>();
   const [progress, setProgress] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [statusLabel, setStatusLabel] = useState('분석 요청 중...');
   const navigatedRef = useRef(false);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // 퍼센트 증가 로직
-  useEffect(() => {
-    navigatedRef.current = false;
-    intervalRef.current = setInterval(() => {
-      setProgress(prev => {
-        const next = prev + 2;
-        if (next >= 100) {
-          clearInterval(intervalRef.current!);
-          return 100;
-        }
-        return next;
-      });
-    }, 60);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [url]);
-
-  // 심장 박동(Pulse) 애니메이션
+  // 심장 박동 애니메이션
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -40,13 +46,70 @@ export default function LoadingScreen() {
     ).start();
   }, []);
 
-  // 로딩 완료 후 이동
   useEffect(() => {
-    if (progress >= 100 && !navigatedRef.current) {
-      navigatedRef.current = true;
-      router.replace({ pathname: '/video' as any, params: { url } });
-    }
-  }, [progress, url]);
+    if (!url) return;
+
+    const stopPolling = () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+
+    const handleError = (message: string) => {
+      stopPolling();
+      Alert.alert('오류', message, [
+        { text: '확인', onPress: () => router.back() },
+      ]);
+    };
+
+    const run = async () => {
+      try {
+        // 1. POST /api/analyze → job_id 받기
+        const { job_id } = await requestAnalysis(url);
+
+        // 2. 3초마다 GET /api/status 폴링
+        pollTimerRef.current = setInterval(async () => {
+          if (navigatedRef.current) return;
+
+          try {
+            const { status, error } = await getJobStatus(job_id);
+
+            setProgress(STATUS_PROGRESS[status]);
+            setStatusLabel(STATUS_LABEL[status]);
+
+            if (status === 'failed') {
+              navigatedRef.current = true;
+              handleError(error ?? '분석 중 문제가 발생했습니다.');
+              return;
+            }
+
+            if (status === 'done') {
+              navigatedRef.current = true;
+              stopPolling();
+
+              // 3. GET /api/result → EmotionTimeline JSON
+              const timeline = await getResultFromApi(job_id);
+
+              // 4. 저장 후 VideoScreen으로 이동
+              setAnalysisResult({ timeline, videoUrl: timeline.videoUrl });
+              router.replace('/video' as any);
+            }
+          } catch (e: any) {
+            navigatedRef.current = true;
+            handleError(e?.message ?? '상태 확인 중 오류가 발생했습니다.');
+          }
+        }, POLL_INTERVAL_MS);
+
+      } catch (e: any) {
+        handleError(e?.message ?? '분석 요청에 실패했습니다.');
+      }
+    };
+
+    run();
+
+    return () => stopPolling();
+  }, [url]);
 
   return (
     <ImageBackground
@@ -55,25 +118,19 @@ export default function LoadingScreen() {
       resizeMode="cover"
     >
       <View style={styles.container}>
-        {/* 하트 진행 표시 */}
         <Animated.View style={[styles.heartWrapper, { transform: [{ scale: pulseAnim }] }]}>
-          {/* 위치 어긋나게 하던 View 래퍼 제거하고 바로 SVG 렌더링 */}
           <HeartProgress progress={progress} size={WAVE_SIZE} />
         </Animated.View>
 
         <Text style={styles.percent}>{progress}%</Text>
-        <Text style={styles.label}>LOADING</Text>
+        <Text style={styles.label}>{statusLabel}</Text>
       </View>
     </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
+  background: { flex: 1, width: '100%', height: '100%' },
   container: {
     flex: 1,
     alignItems: 'center',
@@ -83,9 +140,8 @@ const styles = StyleSheet.create({
   heartWrapper: {
     width: HEART_SIZE,
     height: HEART_SIZE,
-    alignItems: 'center',      // 가로 중앙 정렬
-    justifyContent: 'center',  // 세로 중앙 정렬
-    // absolute 위치 관련 속성 모두 제거하여 Flexbox 기반으로 정중앙 위치
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   percent: {
     fontSize: width * 0.09,
@@ -99,6 +155,6 @@ const styles = StyleSheet.create({
     fontSize: width * 0.033,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.9)',
-    letterSpacing: 3,
+    letterSpacing: 2,
   },
 });
