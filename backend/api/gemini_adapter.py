@@ -24,7 +24,7 @@ def init_vertex_ai() -> None:
 
 
 def _strip_code_fences(text: str) -> str:
-    text = text.strip()
+    text = (text or "").strip()
 
     if text.startswith("```"):
         lines = text.splitlines()
@@ -42,47 +42,37 @@ def _strip_code_fences(text: str) -> str:
     return text
 
 
-def _build_segment_prompt(segment: dict[str, Any]) -> str:
-    return f"""
-You are an emotion classifier for audiovisual accessibility.
-
-Task:
-Given the single audio segment data below, return exactly one valid JSON object.
-Do not use markdown.
-Do not include explanation.
-Do not include extra text.
-Do not include a reason field.
-
-Allowed base_mood values:
-- tension
-- sorrow
-- uplift
-- warmth
-- unknown
-
-Allowed dynamic_event values:
-- stable
-- jump_scare
-- swell
-- sudden_drop
-
-Output format:
-{{
+def _build_segment_prompt(segment: dict) -> str:
+    example_json = """
+{
   "base_mood": "warmth",
   "dynamic_event": "stable",
   "intensity": 0.3
-}}
-
-Rules:
-- intensity must be between 0.0 and 1.0
-- use only the allowed labels
-- return exactly one JSON object
-- choose the most appropriate mood based on the segment features
-- choose "stable" if there is no clear dynamic event
-
-Segment:
-{json.dumps(segment, ensure_ascii=False, indent=2)}
+}
 """.strip()
+
+    segment_json = json.dumps(segment, ensure_ascii=False, indent=2)
+
+    prompt = (
+        "You are an emotion classifier for audiovisual accessibility.\n\n"
+        "Given the single audio segment data below, return exactly one valid JSON object.\n\n"
+        "Rules:\n"
+        "- Return JSON only\n"
+        "- Do not use markdown\n"
+        "- Do not use code fences\n"
+        "- Do not include explanation\n"
+        "- Do not include extra text\n"
+        "- Use double quotes for all keys and string values\n"
+        "- Allowed base_mood values: tension, sorrow, uplift, warmth, unknown\n"
+        "- Allowed dynamic_event values: stable, jump_scare, swell, sudden_drop\n"
+        "- intensity must be between 0.0 and 1.0\n\n"
+        "Output example:\n"
+        + example_json
+        + "\n\nSegment:\n"
+        + segment_json
+    )
+
+    return prompt
 
 
 def _coerce_segment_result(parsed: Any) -> dict[str, Any]:
@@ -91,7 +81,11 @@ def _coerce_segment_result(parsed: Any) -> dict[str, Any]:
 
     base_mood = str(parsed.get("base_mood", "unknown"))
     dynamic_event = str(parsed.get("dynamic_event", "stable"))
-    intensity = float(parsed.get("intensity", 0.5))
+
+    try:
+        intensity = float(parsed.get("intensity", 0.5))
+    except (TypeError, ValueError):
+        intensity = 0.5
 
     allowed_moods = {"tension", "sorrow", "uplift", "warmth", "unknown"}
     allowed_events = {"stable", "jump_scare", "swell", "sudden_drop"}
@@ -160,10 +154,20 @@ def _call_gemini_for_segment(model: GenerativeModel, segment: dict[str, Any]) ->
     raw_text = getattr(response, "text", "") or ""
     cleaned = _strip_code_fences(raw_text)
 
+    logger.info("Gemini raw response for segment %s: %r", segment.get("segment_id"), raw_text)
+    logger.info("Gemini cleaned response for segment %s: %r", segment.get("segment_id"), cleaned)
+
+    if not cleaned:
+        raise ValueError("Gemini returned empty response")
+
     try:
         parsed = json.loads(cleaned)
     except json.JSONDecodeError as e:
-        logger.exception("Gemini returned invalid JSON for segment %s: %s", segment.get("segment_id"), cleaned[:500])
+        logger.exception(
+            "Gemini returned invalid JSON for segment %s: %r",
+            segment.get("segment_id"),
+            cleaned[:500],
+        )
         raise ValueError(f"Gemini returned invalid JSON: {cleaned[:500]}") from e
 
     return _coerce_segment_result(parsed)
@@ -173,7 +177,7 @@ def call_gemini_timeline(audio_features: dict[str, Any]) -> list[dict[str, Any]]
     """
     Calls Gemini once per segment.
     If Gemini fails for a segment, falls back to rule-based output for that segment only.
-    Returns a normalized timeline list that tasks.py can pass to normalize_gemini_timeline().
+    Returns a normalized timeline list.
     """
     init_vertex_ai()
     model = GenerativeModel(MODEL_ID)

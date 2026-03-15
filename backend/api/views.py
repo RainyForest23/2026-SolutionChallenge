@@ -46,7 +46,7 @@ def get_result_service():
     return AnalysisResultService(AnalysisResultRepository())
 
 def get_storage_service():
-    return StorageService
+    return StorageService()
 
 def _forbidden() -> Response:
     return Response({"detail": "Forbidden"}, status=drf_status.HTTP_403_FORBIDDEN)
@@ -304,13 +304,7 @@ def result(request):
         
         # 결과 json 파일
         result_body = get_storage_service().read_json(result_path)
-
-        if result_body is None:
-            result_body = {
-                "videoUrl": "",
-                "base_moods": [],
-                "events": [],
-            }
+        result_body = _normalize_result_body(result_body)
 
         resp_data = ResultResponseSerializer(
             {
