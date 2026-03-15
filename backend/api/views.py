@@ -33,16 +33,20 @@ except Exception:
     analyze_video_task = None
 
 
-user_repo = UserRepository()
-video_repo = VideoRepository()
-job_repo = JobRepository()
-analysis_result_repo = AnalysisResultRepository()
+def get_user_service():
+    return UserService(UserRepository())
 
-user_service = UserService(user_repo)
-video_service = VideoService(video_repo)
-job_service = JobService(job_repo, video_repo)
-analysis_result_service = AnalysisResultService(analysis_result_repo)
-storage_service = StorageService()
+def get_video_service():
+    return VideoService(VideoRepository())
+
+def get_job_service():
+    return JobService(JobRepository(), VideoRepository())
+
+def get_result_service():
+    return AnalysisResultService(AnalysisResultRepository())
+
+def get_storage_service():
+    return StorageService
 
 def _forbidden() -> Response:
     return Response({"detail": "Forbidden"}, status=drf_status.HTTP_403_FORBIDDEN)
@@ -75,7 +79,7 @@ def analyze(request):
 
     # create/update users/{uid}
     try:
-        user_service.upsert_user_from_decoded(decoded)
+        get_user_service().upsert_user_from_decoded(decoded)
     except Exception:
         logger.exception("Failed to upsert user from decoded token")
 
@@ -91,12 +95,12 @@ def analyze(request):
     try:
         # current architecture is video-first, then job
         if youtube_url:
-            existing_video = video_service.get_video_by_youtube_url(uid, youtube_url)
+            existing_video = get_video_service().get_video_by_youtube_url(uid, youtube_url)
 
             if existing_video:
                 video_id = existing_video["videoId"]
 
-                active_job = job_service.get_active_job_by_video(uid, video_id)
+                active_job = get_job_service().get_active_job_by_video(uid, video_id)
                 if active_job:
                     return Response(
                         {
@@ -108,7 +112,7 @@ def analyze(request):
                 # if latest_job is failed or done, allow new job creation
                 # if latest_job is None, also allow
             else:
-                video = video_service.create_video(
+                video = get_video_service().create_video(
                     uid=uid,
                     title=title,
                     youtube_url=youtube_url,
@@ -123,7 +127,7 @@ def analyze(request):
             )
 
         job_id = uuid.uuid4().hex
-        job_service.create_job(uid=uid, job_id=job_id, video_id=video_id, status="queued")
+        get_job_service().create_job(uid=uid, job_id=job_id, video_id=video_id, status="queued")
 
         if analyze_video_task:
             try:
@@ -137,7 +141,7 @@ def analyze(request):
                 )
             except Exception:
                 logger.exception("Failed to enqueue analyze_video_task")
-                job_service.fail_job(uid, job_id, "failed to enqueue task")
+                get_job_service().fail_job(uid, job_id, "failed to enqueue task")
                 return Response(
                     {"job_id": job_id, "video_id": video_id, "status": "failed"},
                     status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -175,7 +179,7 @@ def status(request):
         )
 
     try:
-        job = job_service.get_job(uid, job_id)
+        job = get_job_service().get_job(uid, job_id)
 
         resp_data = StatusResponseSerializer(
             {
@@ -272,7 +276,7 @@ def result(request):
         )
 
     try:
-        job = job_service.get_job(uid, job_id)
+        job = get_job_service().get_job(uid, job_id)
         status_val = job.get("status")
         video_id = job.get("videoId")
 
@@ -287,7 +291,7 @@ def result(request):
                 status=drf_status.HTTP_202_ACCEPTED,
             )
 
-        latest_result = analysis_result_service.get_latest_result(uid, video_id)
+        latest_result = get_result_service().get_latest_result(uid, video_id)
         if not latest_result:
             raise Http404("Analysis result not found")
 
@@ -299,8 +303,14 @@ def result(request):
             raise Http404("Result path not found")
         
         # 결과 json 파일
-        raw_result_body = storage_service.read_json(result_path)
-        result_body = _normalize_result_body(raw_result_body)   
+        result_body = get_storage_service().read_json(result_path)
+
+        if result_body is None:
+            result_body = {
+                "videoUrl": "",
+                "base_moods": [],
+                "events": [],
+            }
 
         resp_data = ResultResponseSerializer(
             {
