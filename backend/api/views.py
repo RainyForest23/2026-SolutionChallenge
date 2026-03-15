@@ -8,7 +8,6 @@ from rest_framework.response import Response
 from rest_framework import status as drf_status
 from rest_framework.exceptions import ValidationError, NotAuthenticated
 
-from firestore_service.auth_helper import authenticate_request
 from firestore_service.repositories.user_repo import UserRepository
 from firestore_service.repositories.video_repo import VideoRepository
 from firestore_service.repositories.job_repo import JobRepository
@@ -71,7 +70,8 @@ def analyze(request):
     Create video + create job + enqueue background pipeline.
     Owner-only API.
     """
-    uid, decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     # create/update users/{uid}
     try:
@@ -91,13 +91,30 @@ def analyze(request):
     try:
         # current architecture is video-first, then job
         if youtube_url:
-            video = video_service.create_video(
-                uid=uid,
-                title=title,
-                youtube_url=youtube_url,
-                duration_sec=None,
-            )
-            video_id = video["videoId"]
+            existing_video = video_service.get_video_by_youtube_url(uid, youtube_url)
+
+            if existing_video:
+                video_id = existing_video["videoId"]
+
+                active_job = job_service.get_active_job_by_video(uid, video_id)
+                if active_job:
+                    return Response(
+                        {
+                            "detail": f"이미 처리 중인 작업이 있습니다. jobId={active_job.get('jobId')}"
+                        },
+                        status=drf_status.HTTP_409_CONFLICT,
+                    )
+
+                # if latest_job is failed or done, allow new job creation
+                # if latest_job is None, also allow
+            else:
+                video = video_service.create_video(
+                    uid=uid,
+                    title=title,
+                    youtube_url=youtube_url,
+                    duration_sec=None,
+                )
+                video_id = video["videoId"]
         else:
             # upload_id flow is not fully designed in current service layer yet
             return Response(
@@ -147,7 +164,8 @@ def status(request):
     GET /api/status?job_id=...
     Returns current processing status for the owner's job.
     """
-    uid, _decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     job_id = request.query_params.get("job_id")
     if not job_id:
@@ -180,7 +198,8 @@ def result(request):
     Result body is expected to come from result JSON in Storage,
     while Firestore stores only the metadata/path.
     """
-    uid, _decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     job_id = request.query_params.get("job_id")
     if not job_id:
@@ -243,7 +262,8 @@ def result(request):
 # Auth 연동 확인 엔드포인트
 @api_view(["GET"])
 def me(request):
-    uid, decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     return Response({
         "uid": uid,
