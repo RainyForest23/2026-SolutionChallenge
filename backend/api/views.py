@@ -40,7 +40,7 @@ def get_video_service():
     return VideoService(VideoRepository())
 
 def get_job_service():
-    return JobService(JobRepository())
+    return JobService(JobRepository(), VideoRepository())
 
 def get_result_service():
     return AnalysisResultService(AnalysisResultRepository())
