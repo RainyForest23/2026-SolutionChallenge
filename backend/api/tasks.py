@@ -146,20 +146,6 @@ def analyze_video_task(
     upload_id: str = None,
     callback_url: str = None,
 ):
-    """
-    Temporary Celery task for async pipeline testing.
-
-    Current behavior:
-    - updates job status
-    - runs audio pipeline for YouTube input
-    - creates analysis_result metadata
-    - writes a temporary result JSON
-    - uploads it to Firebase Storage
-    - marks job as done
-
-    Later this will be replaced with:
-    audio_pipeline -> AI feature extractor -> Gemini -> result.json
-    """
     try:
         if not youtube_url:
             raise ValueError("youtube_url is required for current pipeline")
