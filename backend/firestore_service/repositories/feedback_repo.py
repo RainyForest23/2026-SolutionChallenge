@@ -2,13 +2,15 @@ from google.cloud import firestore
 from typing import Any, Dict, List, Optional
 from .repo_paths import feedback_doc, feedbacks_collection
 
-db = firestore.Client()
 
 class FeedbackRepository:
     """
     videoId 당 feedback은 여러 개 저장 가능
     Path: users/{uid}/videos/{videoId}/feedbacks/{feedbackId}
     """
+
+    def __init__(self):
+        self.db = firestore.Client()
 
     # --------- internal helpers ---------
 
@@ -21,10 +23,10 @@ class FeedbackRepository:
         return {field: doc_id, **(data or {})}
 
     def _doc_ref(self, uid: str, video_id: str, feedback_id: str) -> firestore.DocumentReference:
-        return db.document(feedback_doc(uid, video_id, feedback_id))
+        return self.db.document(feedback_doc(uid, video_id, feedback_id))
 
     def _col_ref(self, uid: str, video_id: str) -> firestore.CollectionReference:
-        return db.collection(feedbacks_collection(uid, video_id))
+        return self.db.collection(feedbacks_collection(uid, video_id))
 
     def _get_dict(self, ref: firestore.DocumentReference) -> Optional[Dict[str, Any]]:
         snap = ref.get()

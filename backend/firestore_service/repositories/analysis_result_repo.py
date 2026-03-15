@@ -3,13 +3,15 @@ from typing import Any, Dict, List, Optional
 from .repo_paths import analysis_results_collection, analysis_result_doc
 from ..storage_paths import result_object_path
 
-db = firestore.Client()
 
 class AnalysisResultRepository:
     """
     videoId 당 analysis_result는 여러 개 저장 가능 (히스토리)
     Path: users/{uid}/videos/{videoId}/analysis_results/{resultId}
     """
+
+    def __init__(self):
+        self.db = firestore.Client()
 
     # --------- internal helpers ---------
 
@@ -22,10 +24,10 @@ class AnalysisResultRepository:
         return {field: doc_id, **(data or {})}
 
     def _doc_ref(self, uid: str, video_id: str, result_id: str) -> firestore.DocumentReference:
-        return db.document(analysis_result_doc(uid, video_id, result_id))
+        return self.db.document(analysis_result_doc(uid, video_id, result_id))
 
     def _col_ref(self, uid: str, video_id: str) -> firestore.CollectionReference:
-        return db.collection(analysis_results_collection(uid, video_id))
+        return self.db.collection(analysis_results_collection(uid, video_id))
 
     def _get_dict(self, ref: firestore.DocumentReference) -> Optional[Dict[str, Any]]:
         snap = ref.get()

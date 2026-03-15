@@ -19,7 +19,10 @@ class StorageService:
 
     def __init__(self, bucket_name: Optional[str] = None):
         get_firebase_app()  
-        self.bucket = storage.bucket(bucket_name) if bucket_name else storage.bucket()
+        bucket_name = bucket_name or os.getenv("FIREBASE_STORAGE_BUCKET")
+        if not bucket_name:
+            raise ValueError("FIREBASE_STORAGE_BUCKET is not set.")
+        self.bucket = storage.bucket(bucket_name)
 
     def upload_file_to_storage(
         self,

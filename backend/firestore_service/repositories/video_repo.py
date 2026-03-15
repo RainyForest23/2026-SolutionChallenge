@@ -2,12 +2,15 @@ from google.cloud import firestore
 from typing import Any, Dict, List, Optional
 from .repo_paths import video_doc, videos_collection
 
-db = firestore.Client()
+
 
 class VideoRepository:
     """
     Path: users/{uid}/videos/{videoId}
     """
+
+    def __init__(self):
+        self.db = firestore.Client()
 
     # --------- internal helpers ---------
 
@@ -20,10 +23,10 @@ class VideoRepository:
         return {field: doc_id, **(data or {})}
 
     def _doc_ref(self, uid: str, video_id: str) -> firestore.DocumentReference:
-        return db.document(video_doc(uid, video_id))
+        return self.db.document(video_doc(uid, video_id))
 
     def _col_ref(self, uid: str) -> firestore.CollectionReference:
-        return db.collection(videos_collection(uid))
+        return self.db.collection(videos_collection(uid))
 
     def _get_dict(self, ref: firestore.DocumentReference) -> Optional[Dict[str, Any]]:
         snap = ref.get()
