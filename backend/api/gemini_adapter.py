@@ -1,26 +1,30 @@
-import json
 import logging
 import os
 from typing import Any
 
-import vertexai
-from vertexai.generative_models import GenerativeModel
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
 PROJECT_ID = os.getenv("VERTEX_PROJECT_ID", "sc-soundsight")
 LOCATION = os.getenv("VERTEX_LOCATION", "us-central1")
-MODEL_ID = os.getenv("VERTEX_MODEL_ID", "gemini-2.5-pro")
+MODEL_ID = os.getenv("VERTEX_MODEL_ID", "gemini-2.5-flash")
 
 
-def init_vertex_ai() -> None:
+def init_vertex_ai() -> genai.Client:
     if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
         raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS is not set")
 
     try:
-        vertexai.init(project=PROJECT_ID, location=LOCATION)
+        client = genai.Client(
+            vertexai=True,
+            project=PROJECT_ID,
+            location=LOCATION,
+        )
+        return client
     except Exception as e:
-        raise RuntimeError(f"Vertex AI initialization failed: {e}") from e
+        raise RuntimeError(f"Google Gen AI client initialization failed: {e}") from e
 
 
 def _strip_code_fences(text: str) -> str:
@@ -42,43 +46,54 @@ def _strip_code_fences(text: str) -> str:
     return text
 
 
-def _build_segment_prompt(segment: dict) -> str:
-    example_json = """
-{
-  "base_mood": "warmth",
-  "dynamic_event": "stable",
-  "intensity": 0.3
-}
-""".strip()
+def _extract_response_text(response: Any) -> str:
+    """
+    google-genai response에서 텍스트를 최대한 안전하게 꺼낸다.
+    """
+    # 가장 먼저 text shortcut
+    text = getattr(response, "text", None)
+    if text and str(text).strip():
+        return str(text).strip()
 
-    segment_json = json.dumps(segment, ensure_ascii=False, indent=2)
+    # candidates/content/parts fallback
+    candidates = getattr(response, "candidates", None) or []
+    collected: list[str] = []
 
-    prompt = (
-        "You are an emotion classifier for audiovisual accessibility.\n\n"
-        "Given the single audio segment data below, return exactly one valid JSON object.\n\n"
-        "Rules:\n"
-        "- Return JSON only\n"
-        "- Do not use markdown\n"
-        "- Do not use code fences\n"
-        "- Do not include explanation\n"
-        "- Do not include extra text\n"
-        "- Use double quotes for all keys and string values\n"
-        "- Allowed base_mood values: tension, sorrow, uplift, warmth, unknown\n"
-        "- Allowed dynamic_event values: stable, jump_scare, swell, sudden_drop\n"
-        "- intensity must be between 0.0 and 1.0\n\n"
-        "Output example:\n"
-        + example_json
-        + "\n\nSegment:\n"
-        + segment_json
+    for cand in candidates:
+        content = getattr(cand, "content", None)
+        if not content:
+            continue
+
+        parts = getattr(content, "parts", None) or []
+        for part in parts:
+            part_text = getattr(part, "text", None)
+            if part_text and str(part_text).strip():
+                collected.append(str(part_text).strip())
+
+    return "\n".join(collected).strip()
+
+
+def _build_segment_prompt(segment: dict[str, Any]) -> str:
+    feats = segment.get("features", {})
+    start = segment.get("start_time_sec", 0.0)
+    end = segment.get("end_time_sec", 0.0)
+
+    return (
+        "Return exactly one line only in this format:\n"
+        "base_mood|dynamic_event|intensity\n"
+        "No JSON. No markdown. No code fences. No explanation.\n"
+        "Allowed base_mood: tension,sorrow,uplift,warmth,unknown\n"
+        "Allowed dynamic_event: stable,jump_scare,swell,sudden_drop\n"
+        "Intensity must be a number from 0.0 to 1.0\n"
+        f"start={start}, end={end}, "
+        f"energy={feats.get('mean_energy', 0.0)}, "
+        f"centroid={feats.get('mean_spectral_centroid', 0.0)}, "
+        f"tempo={feats.get('tempo_bpm', 0.0)}, "
+        f"events={feats.get('event_count', 0)}"
     )
 
-    return prompt
 
-
-def _coerce_segment_result(parsed: Any) -> dict[str, Any]:
-    if not isinstance(parsed, dict):
-        raise ValueError("Gemini output must be a JSON object")
-
+def _coerce_segment_result(parsed: dict[str, Any]) -> dict[str, Any]:
     base_mood = str(parsed.get("base_mood", "unknown"))
     dynamic_event = str(parsed.get("dynamic_event", "stable"))
 
@@ -103,6 +118,47 @@ def _coerce_segment_result(parsed: Any) -> dict[str, Any]:
         "dynamic_event": dynamic_event,
         "intensity": intensity,
     }
+
+
+def _parse_pipe_result(text: str) -> dict[str, Any]:
+    cleaned = _strip_code_fences(text).strip()
+
+    if not cleaned:
+        raise ValueError("Gemini returned empty response")
+
+    first_line = cleaned.splitlines()[0].strip()
+    parts = [p.strip() for p in first_line.split("|")]
+
+    # 너무 짧게 잘린 경우도 일부 salvage
+    if len(parts) == 1 and parts[0]:
+        return _coerce_segment_result(
+            {
+                "base_mood": parts[0],
+                "dynamic_event": "stable",
+                "intensity": 0.5,
+            }
+        )
+
+    if len(parts) != 3:
+        raise ValueError(f"Gemini returned invalid pipe format: {cleaned[:200]}")
+
+    base_mood, dynamic_event, intensity_raw = parts
+
+    if not dynamic_event:
+        dynamic_event = "stable"
+
+    try:
+        intensity = float(intensity_raw) if intensity_raw else 0.5
+    except (TypeError, ValueError):
+        intensity = 0.5
+
+    return _coerce_segment_result(
+        {
+            "base_mood": base_mood,
+            "dynamic_event": dynamic_event,
+            "intensity": intensity,
+        }
+    )
 
 
 def _rule_based_for_segment(segment: dict[str, Any]) -> dict[str, Any]:
@@ -137,40 +193,29 @@ def _rule_based_for_segment(segment: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _call_gemini_for_segment(model: GenerativeModel, segment: dict[str, Any]) -> dict[str, Any]:
+def _call_gemini_for_segment(client: genai.Client, segment: dict[str, Any]) -> dict[str, Any]:
     prompt = _build_segment_prompt(segment)
 
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.0,
-                "max_output_tokens": 128,
-            },
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=128,
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=0
+                ),
+            ),
         )
     except Exception as e:
         raise RuntimeError(f"Gemini request failed: {e}") from e
 
-    raw_text = getattr(response, "text", "") or ""
-    cleaned = _strip_code_fences(raw_text)
+    raw_text = _extract_response_text(response)
 
     logger.info("Gemini raw response for segment %s: %r", segment.get("segment_id"), raw_text)
-    logger.info("Gemini cleaned response for segment %s: %r", segment.get("segment_id"), cleaned)
 
-    if not cleaned:
-        raise ValueError("Gemini returned empty response")
-
-    try:
-        parsed = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        logger.exception(
-            "Gemini returned invalid JSON for segment %s: %r",
-            segment.get("segment_id"),
-            cleaned[:500],
-        )
-        raise ValueError(f"Gemini returned invalid JSON: {cleaned[:500]}") from e
-
-    return _coerce_segment_result(parsed)
+    return _parse_pipe_result(raw_text)
 
 
 def call_gemini_timeline(audio_features: dict[str, Any]) -> list[dict[str, Any]]:
@@ -179,8 +224,7 @@ def call_gemini_timeline(audio_features: dict[str, Any]) -> list[dict[str, Any]]
     If Gemini fails for a segment, falls back to rule-based output for that segment only.
     Returns a normalized timeline list.
     """
-    init_vertex_ai()
-    model = GenerativeModel(MODEL_ID)
+    client = init_vertex_ai()
 
     segments = audio_features.get("segments", [])
     if not segments:
@@ -193,7 +237,7 @@ def call_gemini_timeline(audio_features: dict[str, Any]) -> list[dict[str, Any]]
         logger.info("Calling Gemini for segment %d/%d", idx + 1, len(segments))
 
         try:
-            item = _call_gemini_for_segment(model, seg)
+            item = _call_gemini_for_segment(client, seg)
             source = "gemini"
         except Exception:
             logger.exception(

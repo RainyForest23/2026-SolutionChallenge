@@ -245,7 +245,7 @@ def _normalize_result_body(result_body: dict) -> dict:
         event = item.get("dynamic_event")
         if isinstance(event, dict):
             events.append({
-                "label": event.get("label"),
+                "type": event.get("label"),
                 "trigger_time": event.get("trigger_time"),
                 "duration": event.get("duration"),
                 "strength": event.get("strength"),
