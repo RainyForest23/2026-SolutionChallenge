@@ -1,9 +1,9 @@
 import json
 import logging
+import sys
 from pathlib import Path
 
 from celery import shared_task
-
 from audio_pipeline.pipeline import run_audio_pipeline
 
 from firestore_service.repositories.video_repo import VideoRepository
@@ -15,8 +15,11 @@ from firestore_service.services.job_service import JobService
 from firestore_service.services.analysis_result_service import AnalysisResultService
 from firestore_service.services.storage_service import StorageService
 
-from audio_pipeline.pipeline import run_audio_pipeline
+# add ai-pipeline folder to Python path
+sys.path.append(str(Path(__file__).resolve().parents[1] / "ai-pipeline"))
 
+from audio_extractor.pipeline import AudioFeatureExtractor
+from .gemini_adapter import call_gemini_timeline
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,108 @@ job_service = JobService(job_repo, video_repo)
 analysis_result_service = AnalysisResultService(analysis_result_repo)
 storage_service = StorageService()
 
+def convert_audio_features_to_result(video_url: str, audio_features: dict):
+    base_moods = []
+    events = []
+
+    segments = audio_features.get("segments", [])
+
+    for seg in segments:
+        start = seg["start_time_sec"]
+        end = seg["end_time_sec"]
+        feats = seg["features"]
+
+        energy = feats.get("mean_energy", 0)
+        tempo = feats.get("tempo_bpm", 0)
+        event_count = feats.get("event_count", 0)
+
+        if energy >= 0.12:
+            label = "tension"
+            intensity = min(1.0, round(energy * 4, 2))
+
+        elif tempo >= 125:
+            label = "uplift"
+            intensity = 0.65
+
+        elif energy <= 0.02:
+            label = "sorrow"
+            intensity = 0.35
+
+        else:
+            label = "warmth"
+            intensity = 0.45
+
+        base_moods.append(
+            {
+                "label": label,
+                "intensity": intensity,
+                "start": start,
+                "end": end,
+            }
+        )
+
+        # ---- event rule ----
+        if event_count >= 50:
+            events.append(
+                {
+                    "type": "swell",
+                    "trigger_time": start,
+                    "duration": end - start,
+                    "strength": min(1.0, round(event_count / 80, 2)),
+                }
+            )
+
+        elif energy <= 0.01 and event_count <= 3:
+            events.append(
+                {
+                    "type": "sudden_drop",
+                    "trigger_time": start,
+                    "duration": end - start,
+                    "strength": 0.5,
+                }
+            )
+
+    return {
+        "videoUrl": video_url,
+        "base_moods": base_moods,
+        "events": events,
+    }
+
+def normalize_gemini_timeline(video_url: str, gemini_timeline: list[dict]) -> dict:
+    base_moods = []
+    events = []
+
+    for item in gemini_timeline:
+        start = float(item.get("start_time", 0.0))
+        end = float(item.get("end_time", 0.0))
+        base_mood = item.get("base_mood", "unknown")
+        dynamic_event = item.get("dynamic_event", "stable")
+        intensity = float(item.get("intensity", 0.5))
+
+        base_moods.append(
+            {
+                "label": base_mood,
+                "intensity": max(0.0, min(1.0, intensity)),
+                "start": start,
+                "end": end,
+            }
+        )
+
+        if dynamic_event != "stable":
+            events.append(
+                {
+                    "type": dynamic_event,
+                    "trigger_time": start,
+                    "duration": round(end - start, 2),
+                    "strength": max(0.0, min(1.0, intensity)),
+                }
+            )
+
+    return {
+        "videoUrl": video_url,
+        "base_moods": base_moods,
+        "events": events,
+    }
 
 @shared_task(bind=True)
 def analyze_video_task(
@@ -41,20 +146,6 @@ def analyze_video_task(
     upload_id: str = None,
     callback_url: str = None,
 ):
-    """
-    Temporary Celery task for async pipeline testing.
-
-    Current behavior:
-    - updates job status
-    - runs audio pipeline for YouTube input
-    - creates analysis_result metadata
-    - writes a temporary result JSON
-    - uploads it to Firebase Storage
-    - marks job as done
-
-    Later this will be replaced with:
-    audio_pipeline -> AI feature extractor -> Gemini -> result.json
-    """
     try:
         if not youtube_url:
             raise ValueError("youtube_url is required for current pipeline")
@@ -77,36 +168,58 @@ def analyze_video_task(
         job_service.update_status(uid, job_id, "uploading")
         logger.info("Job %s: uploading stage started", job_id)
 
-        # create result metadata in Firestore
-        result_meta = analysis_result_service.create_result(
-            uid=uid,
-            video_id=video_id,
-            subtitle_source="gemini",
-        )
-        result_id = result_meta["resultId"]
-
-        # get resultPath from Firestore
-        result_path = analysis_result_service.get_result_path(uid, video_id, result_id)
-
         # make local temp folder
         job_dir = Path("/tmp/soundsight") / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
 
         local_result_json_path = job_dir / "emotion_timeline.json"
 
-        # Temporary result body using real pipeline output
+        wav_path = pipeline_output["wav_path"]
+        extractor = AudioFeatureExtractor(segment_duration=10.0, sr=22050)
+        audio_features_json_str = extractor.process(
+            input_path=wav_path,
+            output_json_path=str(job_dir / "audio_features.json"),
+        )
+        audio_features = json.loads(audio_features_json_str)
+
+        try:
+            gemini_timeline = call_gemini_timeline(audio_features=audio_features)
+            result_payload = normalize_gemini_timeline(
+                video_url=youtube_url,
+                gemini_timeline=gemini_timeline,
+            )
+            subtitle_source = "gemini"
+        except Exception:
+            logger.exception("Gemini failed, fallback to rule-based conversion")
+            result_payload = convert_audio_features_to_result(
+                video_url=youtube_url,
+                audio_features=audio_features,
+            )
+            subtitle_source = "rule-based"
+
+                # create result metadata in Firestore
+        result_meta = analysis_result_service.create_result(
+            uid=uid,
+            video_id=video_id,
+            subtitle_source=subtitle_source,
+        )
+        result_id = result_meta["resultId"]
+        # get resultPath from Firestore
+        result_path = analysis_result_service.get_result_path(uid, video_id, result_id)
+
         result_body = {
             "schemaVersion": "1.0.0",
             "videoUrl": youtube_url,
             "pipeline": {
                 "audio_path": pipeline_output.get("audio_path"),
-                "wav_path": pipeline_output.get("wav_path"),
+                "wav_path": wav_path,
                 "segments_dir": pipeline_output.get("segments_dir"),
                 "segment_paths": pipeline_output.get("segment_paths", []),
                 "duration_sec": pipeline_output.get("duration_sec"),
             },
-            "base_moods": [],
-            "events": [],
+            "audio_features": audio_features,
+            "base_moods": result_payload["base_moods"],
+            "events": result_payload["events"],
         }
 
         with local_result_json_path.open("w", encoding="utf-8") as f:
