@@ -1,7 +1,7 @@
 import { getCurrentUserIdToken } from './authService';
 import { EmotionTimeline } from '../domain/emotionTypes';
 
-const BASE_URL = 'http://YOUR_BACKEND_IP:8080';
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
 
 export type JobStatus = 'queued' | 'downloading' | 'uploading' | 'processing' | 'done' | 'failed';
 
@@ -24,7 +24,7 @@ export async function requestAnalysis(videoUrl: string): Promise<{ job_id: strin
   const res = await fetch(`${BASE_URL}/api/analyze`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ url: videoUrl }),
+    body: JSON.stringify({ youtube_url: videoUrl }),
   });
 
   if (!res.ok) {
@@ -58,5 +58,6 @@ export async function getResultFromApi(jobId: string): Promise<EmotionTimeline> 
     throw new Error(err.detail ?? `결과 조회 실패 (${res.status})`);
   }
 
-  return res.json();
+  const data = await res.json();
+  return data.result;
 }
