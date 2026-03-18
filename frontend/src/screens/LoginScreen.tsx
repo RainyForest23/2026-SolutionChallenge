@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   Image,
   ImageBackground,
   KeyboardAvoidingView,
@@ -14,12 +13,11 @@ import {
   Alert,
   TouchableWithoutFeedback,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import GoogleLogo from '../../assets/images/googlelogo.svg';
 import { signInWithEmail } from '../services/authService';
 import { useGoogleSignIn } from '../../hooks/use-google-signin';
-
-const { width, height } = Dimensions.get('window');
 
 type Props = {
   onLoginSuccess: () => void;
@@ -27,6 +25,9 @@ type Props = {
 };
 
 export default function LoginScreen({ onLoginSuccess, onPressSignUp }: Props) {
+  const { width, height } = useWindowDimensions();
+  const styles = getStyles(width, height);
+  const googleIconSize = clamp(width * 0.05, 18, 24);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -121,7 +122,7 @@ export default function LoginScreen({ onLoginSuccess, onPressSignUp }: Props) {
                     onPress={signInWithGoogle}
                     activeOpacity={0.85}
                   >
-                    <GoogleLogo width={width * 0.05} height={width * 0.05} style={styles.googleLogo} />
+                    <GoogleLogo width={googleIconSize} height={googleIconSize} style={styles.googleLogo} />
                     <Text style={styles.googleButtonText}>Google로 로그인</Text>
                   </TouchableOpacity>
                 </>
@@ -160,136 +161,160 @@ function getErrorMessage(code?: string): string {
   }
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  bg: { flex: 1, width: '100%', height: '100%' },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: width * 0.07,
-  },
-  logo: {
-    width: width * 0.55,
-    height: (width * 0.55) / 4,
-    marginBottom: height * 0.012,
-  },
-  tagline: {
-    fontSize: width * 0.027,
-    color: 'rgba(255,255,255,0.7)',
-    letterSpacing: 0.3,
-    marginBottom: height * 0.04,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderRadius: width * 0.07,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.8)',
-    paddingHorizontal: width * 0.06,
-    paddingTop: height * 0.025,
-    paddingBottom: height * 0.025,
-  },
-  title: {
-    fontSize: width * 0.05,
-    fontWeight: '700',
-    color: '#333',
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: width * 0.03,
-    color: '#888',
-    marginTop: 2,
-    marginBottom: height * 0.01,
-    textAlign: 'center',
-  },
-  headerDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    marginBottom: height * 0.02,
-  },
-  input: {
-    width: '100%',
-    height: height * 0.058,
-    backgroundColor: 'rgba(255,255,255,0.65)',
-    borderRadius: width * 0.07,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: width * 0.05,
-    color: '#333',
-    fontSize: width * 0.038,
-    marginBottom: height * 0.012,
-  },
-  button: {
-    width: '100%',
-    height: height * 0.058,
-    backgroundColor: '#A1A1F7',
-    borderRadius: width * 0.07,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: height * 0.005,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: {
-    color: '#fff',
-    fontSize: width * 0.04,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: height * 0.018,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-  },
-  dividerText: {
-    color: '#888',
-    fontSize: width * 0.032,
-    marginHorizontal: 10,
-  },
-  webHint: {
-    marginTop: height * 0.018,
-    textAlign: 'center',
-    color: '#777',
-    fontSize: width * 0.028,
-    lineHeight: width * 0.04,
-  },
-  googleButton: {
-    width: '100%',
-    height: height * 0.058,
-    backgroundColor: 'rgba(255,255,255,0.65)',
-    borderRadius: width * 0.07,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  googleLogo: {
-    marginRight: width * 0.025,
-  },
-  googleButtonText: {
-    color: '#555',
-    fontSize: width * 0.037,
-    fontWeight: '500',
-  },
-  signupRow: {
-    flexDirection: 'row',
-    marginTop: height * 0.025,
-    alignItems: 'center',
-    gap: 6,
-  },
-  signupText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: width * 0.034,
-  },
-  signupLink: {
-    color: '#A1A1F7',
-    fontSize: width * 0.034,
-    fontWeight: '600',
-  },
-});
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getStyles(width: number, height: number) {
+  const isWeb = Platform.OS === 'web';
+  const contentWidth = isWeb ? Math.min(width - 48, 560) : width;
+  const cardRadius = isWeb ? 28 : width * 0.07;
+  const controlHeight = clamp(height * 0.058, 52, 62);
+  const inputFontSize = clamp(width * 0.038, 18, 26);
+  const titleSize = clamp(width * 0.05, 28, 42);
+  const subtitleSize = clamp(width * 0.03, 18, 24);
+  const helperSize = clamp(width * 0.028, 14, 18);
+  const footerSize = clamp(width * 0.034, 16, 20);
+  const logoWidth = isWeb ? Math.min(contentWidth * 0.7, 440) : width * 0.55;
+
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    bg: { flex: 1, width: '100%', height: '100%' },
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: isWeb ? 24 : width * 0.07,
+      paddingVertical: isWeb ? 32 : 0,
+    },
+    logo: {
+      width: logoWidth,
+      height: logoWidth / 4,
+      marginBottom: clamp(height * 0.012, 10, 18),
+    },
+    tagline: {
+      fontSize: helperSize,
+      color: 'rgba(255,255,255,0.82)',
+      letterSpacing: 0.3,
+      marginBottom: clamp(height * 0.04, 24, 36),
+      textAlign: 'center',
+    },
+    card: {
+      width: '100%',
+      maxWidth: contentWidth,
+      backgroundColor: 'rgba(255,255,255,0.74)',
+      borderRadius: cardRadius,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.86)',
+      paddingHorizontal: isWeb ? 32 : width * 0.06,
+      paddingTop: isWeb ? 28 : height * 0.025,
+      paddingBottom: isWeb ? 28 : height * 0.025,
+      shadowColor: '#6E6E9A',
+      shadowOpacity: isWeb ? 0.16 : 0,
+      shadowRadius: 22,
+      shadowOffset: { width: 0, height: 12 },
+    },
+    title: {
+      fontSize: titleSize,
+      fontWeight: '700',
+      color: '#333',
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontSize: subtitleSize,
+      color: '#737373',
+      marginTop: 4,
+      marginBottom: clamp(height * 0.01, 12, 18),
+      textAlign: 'center',
+    },
+    headerDivider: {
+      height: 1,
+      backgroundColor: 'rgba(255,255,255,0.8)',
+      marginBottom: clamp(height * 0.02, 16, 24),
+    },
+    input: {
+      width: '100%',
+      height: controlHeight,
+      backgroundColor: 'rgba(255,255,255,0.82)',
+      borderRadius: cardRadius,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.94)',
+      paddingHorizontal: isWeb ? 24 : width * 0.05,
+      color: '#333',
+      fontSize: inputFontSize,
+      marginBottom: clamp(height * 0.012, 12, 16),
+    },
+    button: {
+      width: '100%',
+      height: controlHeight,
+      backgroundColor: '#9694F2',
+      borderRadius: cardRadius,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: clamp(height * 0.005, 6, 10),
+    },
+    buttonDisabled: { opacity: 0.5 },
+    buttonText: {
+      color: '#fff',
+      fontSize: clamp(width * 0.04, 18, 28),
+      fontWeight: '600',
+      letterSpacing: 0.5,
+    },
+    dividerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginVertical: clamp(height * 0.018, 16, 20),
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: 'rgba(255,255,255,0.8)',
+    },
+    dividerText: {
+      color: '#888',
+      fontSize: clamp(width * 0.032, 15, 18),
+      marginHorizontal: 10,
+    },
+    webHint: {
+      marginTop: clamp(height * 0.018, 16, 20),
+      textAlign: 'center',
+      color: '#676767',
+      fontSize: helperSize,
+      lineHeight: helperSize * 1.4,
+    },
+    googleButton: {
+      width: '100%',
+      height: controlHeight,
+      backgroundColor: 'rgba(255,255,255,0.82)',
+      borderRadius: cardRadius,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.94)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    googleLogo: {
+      marginRight: 12,
+    },
+    googleButtonText: {
+      color: '#555',
+      fontSize: inputFontSize,
+      fontWeight: '500',
+    },
+    signupRow: {
+      flexDirection: 'row',
+      marginTop: clamp(height * 0.025, 18, 26),
+      alignItems: 'center',
+      gap: 6,
+    },
+    signupText: {
+      color: 'rgba(255,255,255,0.82)',
+      fontSize: footerSize,
+    },
+    signupLink: {
+      color: '#A1A1F7',
+      fontSize: footerSize,
+      fontWeight: '600',
+    },
+  });
+}
