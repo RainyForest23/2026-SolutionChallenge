@@ -18,8 +18,14 @@ class StorageReadError(Exception):
 class StorageService:
 
     def __init__(self, bucket_name: Optional[str] = None):
-        get_firebase_app()  
-        self.bucket = storage.bucket(bucket_name) if bucket_name else storage.bucket()
+        self.bucket_name = bucket_name
+
+    def _get_bucket(self, bucket_name: Optional[str] = None):
+        get_firebase_app()
+        resolved_bucket_name = bucket_name or self.bucket_name
+        if resolved_bucket_name:
+            return storage.bucket(resolved_bucket_name)
+        return storage.bucket()
 
     def upload_file_to_storage(
         self,
@@ -37,7 +43,7 @@ class StorageService:
             raise StorageUploadError(f"Local file not found: {local_path}")
 
         try:
-            bucket = storage.bucket(bucket_name) if bucket_name else storage.bucket()
+            bucket = self._get_bucket(bucket_name)
             if not bucket:
                 raise StorageUploadError("Storage bucket not initialized")
             
@@ -82,15 +88,19 @@ class StorageService:
     def read_json(self, storage_path: str) -> Dict[str, Any]:
         if not storage_path:
             raise BadRequestError("storage_path is required")
-        
-        blob = self.bucket.blob(storage_path)
 
-        if not blob.exists():
-            raise StorageReadError(f"Storage file not found: {storage_path}")
-        
         try:
+            blob = self._get_bucket().blob(storage_path)
+            if not blob.exists():
+                raise StorageReadError(f"Storage file not found: {storage_path}")
             raw_bytes = blob.download_as_bytes()
             return json.loads(raw_bytes.decode("utf-8"))
+        except ValueError as exc:
+            raise StorageReadError(
+                "Firebase Storage bucket is not configured. Set FIREBASE_STORAGE_BUCKET in Cloud Run."
+            ) from exc
+        except StorageReadError:
+            raise
         except json.JSONDecodeError as exc:
             raise StorageReadError(f"Invalid JSON file in storage: {storage_path}")
         except Exception as exc:

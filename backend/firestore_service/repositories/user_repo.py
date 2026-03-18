@@ -1,8 +1,7 @@
 from google.cloud import firestore
 from typing import Any, Dict, Optional
 from .repo_paths import user_doc, users_collection
-
-db = firestore.Client()
+from ..firestore_client import get_firestore_client
 
 
 class UserRepository:
@@ -16,11 +15,15 @@ class UserRepository:
     def _now_ts():
         return firestore.SERVER_TIMESTAMP
 
+    @staticmethod
+    def _db():
+        return get_firestore_client()
+
     def _doc_ref(self, uid: str) -> firestore.DocumentReference:
-        return db.document(user_doc(uid))
+        return self._db().document(user_doc(uid))
 
     def _col_ref(self) -> firestore.CollectionReference:
-        return db.collection(users_collection())
+        return self._db().collection(users_collection())
 
     def _get_dict(self, ref: firestore.DocumentReference) -> Optional[Dict[str, Any]]:
         snap = ref.get()

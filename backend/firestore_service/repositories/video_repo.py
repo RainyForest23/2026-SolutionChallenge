@@ -1,8 +1,7 @@
 from google.cloud import firestore
 from typing import Any, Dict, List, Optional
 from .repo_paths import video_doc, videos_collection
-
-db = firestore.Client()
+from ..firestore_client import get_firestore_client
 
 class VideoRepository:
     """
@@ -16,14 +15,18 @@ class VideoRepository:
         return firestore.SERVER_TIMESTAMP
 
     @staticmethod
+    def _db():
+        return get_firestore_client()
+
+    @staticmethod
     def _with_id(field: str, doc_id: str, data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         return {field: doc_id, **(data or {})}
 
     def _doc_ref(self, uid: str, video_id: str) -> firestore.DocumentReference:
-        return db.document(video_doc(uid, video_id))
+        return self._db().document(video_doc(uid, video_id))
 
     def _col_ref(self, uid: str) -> firestore.CollectionReference:
-        return db.collection(videos_collection(uid))
+        return self._db().collection(videos_collection(uid))
 
     def _get_dict(self, ref: firestore.DocumentReference) -> Optional[Dict[str, Any]]:
         snap = ref.get()

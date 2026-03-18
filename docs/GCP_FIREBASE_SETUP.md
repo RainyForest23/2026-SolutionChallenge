@@ -58,11 +58,18 @@
 
 ### 필수 환경 변수 (예시)
 
-- `GOOGLE_APPLICATION_CREDENTIALS`: GCP 서비스 계정 JSON 파일 경로 (Backend)
+- `DJANGO_SECRET_KEY`: Django 운영 시크릿 키
+- `ALLOWED_HOSTS`: Cloud Run 도메인 또는 커스텀 도메인
 - `FIREBASE_API_KEY`: Firebase 설정용 Web API Key (Frontend/Backend)
 - `FIREBASE_AUTH_DOMAIN`: sc-soundsight.firebaseapp.com
 - `FIREBASE_PROJECT_ID`: sc-soundsight
 - `FIREBASE_STORAGE_BUCKET`: sc-soundsight.firebasestorage.app
+
+Cloud Run 운영 원칙:
+
+- Cloud Run에서는 `GOOGLE_APPLICATION_CREDENTIALS`를 설정하지 않는다.
+- Cloud Run 서비스에 연결된 서비스 계정의 ADC(Application Default Credentials)를 사용한다.
+- 로컬 개발에서만 JSON 키 파일 경로를 사용한다.
 
 ---
 

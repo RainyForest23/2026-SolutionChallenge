@@ -1,8 +1,7 @@
 from google.cloud import firestore
 from typing import Any, Dict, List, Optional
 from .repo_paths import feedback_doc, feedbacks_collection
-
-db = firestore.Client()
+from ..firestore_client import get_firestore_client
 
 class FeedbackRepository:
     """
@@ -17,14 +16,18 @@ class FeedbackRepository:
         return firestore.SERVER_TIMESTAMP
 
     @staticmethod
+    def _db():
+        return get_firestore_client()
+
+    @staticmethod
     def _with_id(field: str, doc_id: str, data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         return {field: doc_id, **(data or {})}
 
     def _doc_ref(self, uid: str, video_id: str, feedback_id: str) -> firestore.DocumentReference:
-        return db.document(feedback_doc(uid, video_id, feedback_id))
+        return self._db().document(feedback_doc(uid, video_id, feedback_id))
 
     def _col_ref(self, uid: str, video_id: str) -> firestore.CollectionReference:
-        return db.collection(feedbacks_collection(uid, video_id))
+        return self._db().collection(feedbacks_collection(uid, video_id))
 
     def _get_dict(self, ref: firestore.DocumentReference) -> Optional[Dict[str, Any]]:
         snap = ref.get()
