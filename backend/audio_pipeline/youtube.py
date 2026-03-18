@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from pathlib import Path
 from typing import Optional
 
 from .exceptions import DownloadError, InvalidURLError
 from .utils import ensure_dir, run_cmd, which
+
+logger = logging.getLogger(__name__)
 
 def download_youtube_audio(
     *,
@@ -46,8 +50,21 @@ def download_youtube_audio(
         "0",
         "-o",
         outtmpl,
-        url,
     ]
+
+    extractor_args = (os.getenv("YTDLP_EXTRACTOR_ARGS") or "").strip()
+    if extractor_args:
+        cmd.extend(["--extractor-args", extractor_args])
+
+    cookies_path = (os.getenv("YTDLP_COOKIES_PATH") or "").strip()
+    if cookies_path:
+        cookie_file = Path(cookies_path)
+        if cookie_file.exists():
+            cmd.extend(["--cookies", str(cookie_file)])
+        else:
+            logger.warning("YTDLP_COOKIES_PATH is set but file does not exist: %s", cookies_path)
+
+    cmd.append(url)
 
     # 명령어 실행 및 결과 확인
     res = run_cmd(cmd)
