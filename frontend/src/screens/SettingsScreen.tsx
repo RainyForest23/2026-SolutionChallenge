@@ -9,21 +9,23 @@ import { DEFAULT_SETTINGS, setSettings } from '../store/settingsStore';
 import { ChannelSettings } from '../domain/types';
 import Toggle from '../components/Toggle';
 import { usePersistedSettings } from '../../hooks/use-persisted-settings';
+import { auth } from '../services/firebase';
 
 const { width, height } = Dimensions.get('window');
 const SHEET_HEIGHT = height * 0.95;
 const DYNAMIC_EVENT_IDS = ['sudden_shock', 'gradual_rise', 'sudden_silence'];
 
 export default function SettingsScreen() {
-  const { saved, loaded, save } = usePersistedSettings();
+  const uid = auth.currentUser?.uid;
+  const { saved, loaded, save } = usePersistedSettings(uid);
 
   const [settings, setLocal] = useState<ChannelSettings>({ ...DEFAULT_SETTINGS });
   const [moodIntensities, setMoodIntensities] = useState<Record<string, number>>(
-    Object.fromEntries(DEFAULT_SETTINGS.baseMoods.map(m => [m.id, 50]))
+    Object.fromEntries(DEFAULT_SETTINGS.baseMoods.map(m => [m.id, 70]))
   );
-  const [dynamicEnabled, setDynamicEnabled] = useState(false);
+  const [dynamicEnabled, setDynamicEnabled] = useState(true);
   const [eventIntensities, setEventIntensities] = useState<Record<string, number>>(
-    Object.fromEntries(DYNAMIC_EVENT_IDS.map(id => [id, 50]))
+    Object.fromEntries(DYNAMIC_EVENT_IDS.map(id => [id, 70]))
   );
 
   // 저장된 설정 불러오기
