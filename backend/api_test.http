@@ -1,17 +1,25 @@
+@baseUrl = http://127.0.0.1:8080 
+@firebaseToken = your_firebase_token_here
+
+@jobId = your_job_id_here
+### Firebase Auth check 
+GET {{baseUrl}}/api/me
+Authorization: Bearer {{firebaseToken}}
+
 ### 작업 시작
-POST http://127.0.0.1:8080/api/analyze
+POST {{baseUrl}}/api/analyze
 Content-Type: application/json
+Authorization: Bearer {{firebaseToken}}
 
 {
-  "youtube_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  "youtube_url": "https://www.youtube.com/watch?v=gIHjXDxghqE",
+  "title": "Interstellar Test"
 }
 
 ### 상태 조회
-GET http://127.0.0.1:8080/api/status?job_id=your_job_id_here
+GET {{baseUrl}}/api/status?job_id={{jobId}}
+Authorization: Bearer {{firebaseToken}}
 
 ### 결과 조회
-GET http://127.0.0.1:8080/api/result?job_id=your_job_id_here
-
-### Me (Firebase Auth test)
-GET http://127.0.0.1:8080/api/me
-Authorization: Bearer firebase_id_token
+GET {{baseUrl}}/api/result?job_id={{jobId}}
+Authorization: Bearer {{firebaseToken}}

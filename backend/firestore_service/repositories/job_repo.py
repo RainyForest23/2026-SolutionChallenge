@@ -10,6 +10,9 @@ class JobRepository:
     Path: users/{uid}/jobs/{jobId}
     """
 
+    def __init__(self):
+        self.db = firestore.Client()
+
     # --------- internal helpers ---------
 
     @staticmethod

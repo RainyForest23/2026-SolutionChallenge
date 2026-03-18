@@ -8,7 +8,6 @@ from rest_framework.response import Response
 from rest_framework import status as drf_status
 from rest_framework.exceptions import ValidationError, NotAuthenticated
 
-from firestore_service.auth_helper import authenticate_request
 from firestore_service.repositories.user_repo import UserRepository
 from firestore_service.repositories.video_repo import VideoRepository
 from firestore_service.repositories.job_repo import JobRepository
@@ -34,16 +33,20 @@ except Exception:
     analyze_video_task = None
 
 
-user_repo = UserRepository()
-video_repo = VideoRepository()
-job_repo = JobRepository()
-analysis_result_repo = AnalysisResultRepository()
+def get_user_service():
+    return UserService(UserRepository())
 
-user_service = UserService(user_repo)
-video_service = VideoService(video_repo)
-job_service = JobService(job_repo, video_repo)
-analysis_result_service = AnalysisResultService(analysis_result_repo)
-storage_service = StorageService()
+def get_video_service():
+    return VideoService(VideoRepository())
+
+def get_job_service():
+    return JobService(JobRepository(), VideoRepository())
+
+def get_result_service():
+    return AnalysisResultService(AnalysisResultRepository())
+
+def get_storage_service():
+    return StorageService()
 
 def _forbidden() -> Response:
     return Response({"detail": "Forbidden"}, status=drf_status.HTTP_403_FORBIDDEN)
@@ -71,11 +74,12 @@ def analyze(request):
     Create video + create job + enqueue background pipeline.
     Owner-only API.
     """
-    uid, decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     # create/update users/{uid}
     try:
-        user_service.upsert_user_from_decoded(decoded)
+        get_user_service().upsert_user_from_decoded(decoded)
     except Exception:
         logger.exception("Failed to upsert user from decoded token")
 
@@ -91,13 +95,30 @@ def analyze(request):
     try:
         # current architecture is video-first, then job
         if youtube_url:
-            video = video_service.create_video(
-                uid=uid,
-                title=title,
-                youtube_url=youtube_url,
-                duration_sec=None,
-            )
-            video_id = video["videoId"]
+            existing_video = get_video_service().get_video_by_youtube_url(uid, youtube_url)
+
+            if existing_video:
+                video_id = existing_video["videoId"]
+
+                active_job = get_job_service().get_active_job_by_video(uid, video_id)
+                if active_job:
+                    return Response(
+                        {
+                            "detail": f"이미 처리 중인 작업이 있습니다. jobId={active_job.get('jobId')}"
+                        },
+                        status=drf_status.HTTP_409_CONFLICT,
+                    )
+
+                # if latest_job is failed or done, allow new job creation
+                # if latest_job is None, also allow
+            else:
+                video = get_video_service().create_video(
+                    uid=uid,
+                    title=title,
+                    youtube_url=youtube_url,
+                    duration_sec=None,
+                )
+                video_id = video["videoId"]
         else:
             # upload_id flow is not fully designed in current service layer yet
             return Response(
@@ -106,7 +127,7 @@ def analyze(request):
             )
 
         job_id = uuid.uuid4().hex
-        job_service.create_job(uid=uid, job_id=job_id, video_id=video_id, status="queued")
+        get_job_service().create_job(uid=uid, job_id=job_id, video_id=video_id, status="queued")
 
         if analyze_video_task:
             try:
@@ -120,7 +141,7 @@ def analyze(request):
                 )
             except Exception:
                 logger.exception("Failed to enqueue analyze_video_task")
-                job_service.fail_job(uid, job_id, "failed to enqueue task")
+                get_job_service().fail_job(uid, job_id, "failed to enqueue task")
                 return Response(
                     {"job_id": job_id, "video_id": video_id, "status": "failed"},
                     status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -147,7 +168,8 @@ def status(request):
     GET /api/status?job_id=...
     Returns current processing status for the owner's job.
     """
-    uid, _decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     job_id = request.query_params.get("job_id")
     if not job_id:
@@ -157,7 +179,7 @@ def status(request):
         )
 
     try:
-        job = job_service.get_job(uid, job_id)
+        job = get_job_service().get_job(uid, job_id)
 
         resp_data = StatusResponseSerializer(
             {
@@ -172,6 +194,69 @@ def status(request):
     except Exception as exc:
         return _handle_service_error(exc)
 
+def _normalize_result_body(result_body: dict) -> dict:
+    """
+    Convert stored pipeline JSON into the API response shape:
+    {
+        "videoUrl": str,
+        "base_moods": list,
+        "events": list,
+    }
+    """
+    if not isinstance(result_body, dict):
+        return {
+            "videoUrl": "",
+            "base_moods": [],
+            "events": [],
+        }
+
+    # already in desired shape
+    if (
+        "videoUrl" in result_body
+        and "base_moods" in result_body
+        and "events" in result_body
+    ):
+        return {
+            "videoUrl": result_body.get("videoUrl", ""),
+            "base_moods": result_body.get("base_moods", []) or [],
+            "events": result_body.get("events", []) or [],
+        }
+
+    # fallback: old structure
+    video_url = result_body.get("videoUrl", "")
+    timeline = result_body.get("timeline", []) or []
+
+    base_moods = []
+    events = []
+
+    for item in timeline:
+        if not isinstance(item, dict):
+            continue
+
+        base = item.get("base_mood")
+        if isinstance(base, dict):
+            base_moods.append({
+                "start": item.get("t_start"),
+                "end": item.get("t_end"),
+                "label": base.get("label"),
+                "intensity": base.get("intensity"),
+            })
+
+        event = item.get("dynamic_event")
+        if isinstance(event, dict):
+            events.append({
+                "type": event.get("label"),
+                "trigger_time": event.get("trigger_time"),
+                "duration": event.get("duration"),
+                "strength": event.get("strength"),
+            })
+
+    return {
+        "videoUrl": video_url,
+        "base_moods": base_moods,
+        "events": events,
+    }
+
 @api_view(["GET"])
 def result(request):
     """
@@ -180,7 +265,8 @@ def result(request):
     Result body is expected to come from result JSON in Storage,
     while Firestore stores only the metadata/path.
     """
-    uid, _decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     job_id = request.query_params.get("job_id")
     if not job_id:
@@ -190,7 +276,7 @@ def result(request):
         )
 
     try:
-        job = job_service.get_job(uid, job_id)
+        job = get_job_service().get_job(uid, job_id)
         status_val = job.get("status")
         video_id = job.get("videoId")
 
@@ -205,7 +291,7 @@ def result(request):
                 status=drf_status.HTTP_202_ACCEPTED,
             )
 
-        latest_result = analysis_result_service.get_latest_result(uid, video_id)
+        latest_result = get_result_service().get_latest_result(uid, video_id)
         if not latest_result:
             raise Http404("Analysis result not found")
 
@@ -217,14 +303,8 @@ def result(request):
             raise Http404("Result path not found")
         
         # 결과 json 파일
-        result_body = storage_service.read_json(result_path)
-
-        if result_body is None:
-            result_body = {
-                "videoUrl": "",
-                "base_moods": [],
-                "events": [],
-            }
+        result_body = get_storage_service().read_json(result_path)
+        result_body = _normalize_result_body(result_body)
 
         resp_data = ResultResponseSerializer(
             {
@@ -243,7 +323,8 @@ def result(request):
 # Auth 연동 확인 엔드포인트
 @api_view(["GET"])
 def me(request):
-    uid, decoded = authenticate_request(request)
+    uid = request.user.uid
+    decoded = request.auth
 
     return Response({
         "uid": uid,

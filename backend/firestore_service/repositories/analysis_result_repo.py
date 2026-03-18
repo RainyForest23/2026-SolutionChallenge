@@ -10,6 +10,9 @@ class AnalysisResultRepository:
     Path: users/{uid}/videos/{videoId}/analysis_results/{resultId}
     """
 
+    def __init__(self):
+        self.db = firestore.Client()
+
     # --------- internal helpers ---------
 
     @staticmethod

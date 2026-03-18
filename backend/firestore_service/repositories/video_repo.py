@@ -8,6 +8,9 @@ class VideoRepository:
     Path: users/{uid}/videos/{videoId}
     """
 
+    def __init__(self):
+        self.db = firestore.Client()
+
     # --------- internal helpers ---------
 
     @staticmethod

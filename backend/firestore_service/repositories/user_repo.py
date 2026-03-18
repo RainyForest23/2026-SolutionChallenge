@@ -9,6 +9,9 @@ class UserRepository:
     Path: users/{uid}
     """
 
+    def __init__(self):
+        self.db = firestore.Client()
+
     # --------- internal helpers ---------
 
     @staticmethod

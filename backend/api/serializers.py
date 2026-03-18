@@ -77,6 +77,6 @@ class ResultPayloadSerializer(serializers.Serializer):
 # GET /api/result
 class ResultResponseSerializer(serializers.Serializer):
     job_id = serializers.CharField()
-    video_id = serializers.CharField(required=False)
+    video_id = serializers.CharField()
     status = serializers.CharField()
-    result = ResultPayloadSerializer(required=False, allow_null=True)
+    result = serializers.DictField()

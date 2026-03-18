@@ -9,6 +9,9 @@ class FeedbackRepository:
     Path: users/{uid}/videos/{videoId}/feedbacks/{feedbackId}
     """
 
+    def __init__(self):
+        self.db = firestore.Client()
+
     # --------- internal helpers ---------
 
     @staticmethod
