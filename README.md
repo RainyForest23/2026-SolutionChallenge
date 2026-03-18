@@ -125,9 +125,13 @@ python -m pytest tests/
 ```
 GEMINI_API_KEY=your_gemini_api_key
 GOOGLE_CLOUD_PROJECT=your_gcp_project_id
-FIREBASE_SERVICE_ACCOUNT_KEY=path/to/serviceAccountKey.json
+DJANGO_SECRET_KEY=your_django_secret_key
+ALLOWED_HOSTS=localhost,127.0.0.1
+GOOGLE_APPLICATION_CREDENTIALS=./secret/serviceAccountKey.json
 VERTEX_AI_LOCATION=asia-northeast3
 ```
+
+Cloud Run에서는 `GOOGLE_APPLICATION_CREDENTIALS`를 설정하지 않고, 서비스에 연결된 GCP 서비스 계정의 기본 인증(ADC)을 사용합니다.
 
 ## 팀
 
