@@ -1,0 +1,14 @@
+steps:
+  # 이미지 빌드
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-demo/soundsight-api:$COMMIT_SHA', '.']
+
+  # Artifact Registry에 푸시
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/my-repo/game2048:$COMMIT_SHA']
+
+  # Cloud Run 배포
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args: ['gcloud', 'run', 'deploy', 'soundsight-api',
+           '--image', 'us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-demo/soundsight-api:$COMMIT_SHA',
+           '--region', 'us-central1']
