@@ -47,6 +47,16 @@
 
 - 서비스 계정 키(JSON)는 GitHub에 업로드하지 않는다.
 - 운영 API Key는 Cloud Run 환경 변수로만 관리한다.
+- Cloud Run 런타임은 JSON 키 대신 연결된 서비스 계정의 ADC를 사용한다.
+
+### Cloud Run 배포 시 필요한 역할
+
+- 배포 계정(사람 또는 CI): `roles/run.developer`
+- 배포 계정(사람 또는 CI): `roles/artifactregistry.reader`
+- 배포 계정(사람 또는 CI): `roles/iam.serviceAccountUser`
+- Cloud Run 런타임 서비스 계정: `roles/datastore.user`
+- Cloud Run 런타임 서비스 계정: `roles/storage.objectUser`
+- Cloud Run 런타임 서비스 계정: `roles/aiplatform.user` (Vertex AI 호출 시)
 
 ---
 
@@ -58,12 +68,18 @@
 
 ### 필수 환경 변수 (예시)
 
-- `DJANGO_SECRET_KEY`: Django 운영 시크릿 키
-- `ALLOWED_HOSTS`: Cloud Run 도메인 또는 커스텀 도메인
+- `GOOGLE_CLOUD_PROJECT`: GCP 프로젝트 ID
 - `FIREBASE_API_KEY`: Firebase 설정용 Web API Key (Frontend/Backend)
 - `FIREBASE_AUTH_DOMAIN`: sc-soundsight.firebaseapp.com
 - `FIREBASE_PROJECT_ID`: sc-soundsight
 - `FIREBASE_STORAGE_BUCKET`: sc-soundsight.firebasestorage.app
+- `DJANGO_SECRET_KEY`: Django 운영 시크릿 키
+- `ALLOWED_HOSTS`: 허용할 호스트 목록
+
+주의:
+
+- `GOOGLE_APPLICATION_CREDENTIALS`는 로컬 개발에서만 사용
+- Cloud Run 환경에서는 `GOOGLE_APPLICATION_CREDENTIALS`를 비워 두고 ADC 사용
 
 Cloud Run 운영 원칙:
 
