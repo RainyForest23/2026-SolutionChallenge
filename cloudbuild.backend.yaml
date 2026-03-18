@@ -1,0 +1,39 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "backend/Dockerfile"
+      - "-t"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:${_IMAGE_TAG}"
+      - "."
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:${_IMAGE_TAG}"
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "${_SERVICE_NAME}"
+      - "--project=$PROJECT_ID"
+      - "--region=${_REGION}"
+      - "--image=us-central1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:${_IMAGE_TAG}"
+      - "--platform=managed"
+      - "--quiet"
+
+images:
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:${_IMAGE_TAG}"
+
+substitutions:
+  _REGION: "us-central1"
+  _SERVICE_NAME: "soundsight"
+  _REPOSITORY: "soundsight"
+  _IMAGE_NAME: "soundsight"
+  _IMAGE_TAG: "manual"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

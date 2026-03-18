@@ -133,6 +133,39 @@ VERTEX_AI_LOCATION=asia-northeast3
 
 Cloud Run에서는 `GOOGLE_APPLICATION_CREDENTIALS`를 설정하지 않고, 서비스에 연결된 GCP 서비스 계정의 기본 인증(ADC)을 사용합니다.
 
+### Cloud Run 데모 배포
+
+백엔드 이미지를 Cloud Build로 빌드하고 바로 Cloud Run에 배포하려면 루트의 `cloudbuild.backend.yaml`을 사용합니다.
+
+```bash
+gcloud builds submit \
+  --config cloudbuild.backend.yaml \
+  --substitutions=_IMAGE_TAG=main-430e225 \
+  .
+```
+
+Cloud Run 단일 서비스로 데모를 돌릴 때는 `CELERY_TASK_ALWAYS_EAGER=true`를 사용하면 별도 Redis/Celery worker 없이도 분석 태스크가 같은 컨테이너 안에서 실행됩니다.
+
+### 프론트엔드 연동
+
+프론트 앱은 아래 환경변수만 채우면 Firebase 로그인 + 백엔드 API 호출 흐름을 사용할 수 있습니다.
+
+```bash
+cp frontend/.env.example frontend/.env
+```
+
+필수 항목:
+
+- `EXPO_PUBLIC_FIREBASE_API_KEY`
+- `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `EXPO_PUBLIC_FIREBASE_PROJECT_ID`
+- `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `EXPO_PUBLIC_FIREBASE_APP_ID`
+- `EXPO_PUBLIC_BACKEND_URL` 예: `https://soundsight-xxxxx.us-central1.run.app`
+
+브라우저 기반 Expo web 데모를 쓸 경우 백엔드에 `CORS_ALLOWED_ORIGINS`도 함께 설정해야 합니다.
+
 ## 팀
 
 | 이름 | 역할 | 담당 |

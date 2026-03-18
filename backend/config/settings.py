@@ -51,6 +51,10 @@ if not ALLOWED_HOSTS:
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+CORS_ALLOW_ALL_ORIGINS = _env_bool("CORS_ALLOW_ALL_ORIGINS", default=False)
+CORS_ALLOWED_ORIGINS = _env_list("CORS_ALLOWED_ORIGINS")
+CORS_ALLOW_CREDENTIALS = True
+
 
 # Application definition
 
@@ -61,12 +65,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
     "api",
     "rest_framework",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -157,3 +163,24 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
 }
+
+# Cloud Run demo mode:
+# if no broker is configured, execute Celery tasks eagerly in-process so the
+# single service can still complete analysis end-to-end for demos.
+_default_celery_eager = bool(os.getenv("K_SERVICE")) and not os.getenv("CELERY_BROKER_URL")
+CELERY_TASK_ALWAYS_EAGER = _env_bool("CELERY_TASK_ALWAYS_EAGER", default=_default_celery_eager)
+CELERY_TASK_EAGER_PROPAGATES = _env_bool("CELERY_TASK_EAGER_PROPAGATES", default=DEBUG)
+
+CELERY_BROKER_URL = os.getenv(
+    "CELERY_BROKER_URL",
+    "memory://" if CELERY_TASK_ALWAYS_EAGER else "redis://redis:6379/0",
+)
+CELERY_RESULT_BACKEND = os.getenv(
+    "CELERY_RESULT_BACKEND",
+    "cache+memory://" if CELERY_TASK_ALWAYS_EAGER else CELERY_BROKER_URL,
+)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "Asia/Seoul"
+CELERY_ENABLE_UTC = False
