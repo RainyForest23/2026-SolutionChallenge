@@ -166,6 +166,18 @@ cp frontend/.env.example frontend/.env
 
 브라우저 기반 Expo web 데모를 쓸 경우 백엔드에 `CORS_ALLOWED_ORIGINS`도 함께 설정해야 합니다.
 
+### 공개 웹 배포
+
+Expo web 정적 산출물은 `frontend/dist`에 생성되며, 루트의 Firebase Hosting 설정으로 바로 배포할 수 있습니다.
+
+```bash
+firebase deploy --only hosting
+```
+
+이 명령은 `firebase.json`의 `predeploy`에 의해 자동으로 `npm --prefix frontend run export:web`를 먼저 실행합니다.
+
+웹 데모에서는 Google 네이티브 로그인 대신 이메일 로그인/회원가입 흐름을 사용합니다.
+
 ## 팀
 
 | 이름 | 역할 | 담당 |

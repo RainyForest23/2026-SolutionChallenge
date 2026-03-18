@@ -23,6 +23,7 @@ steps:
       - "--region=${_REGION}"
       - "--image=us-central1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:${_IMAGE_TAG}"
       - "--platform=managed"
+      - "--update-env-vars=CELERY_TASK_ALWAYS_EAGER=true,CORS_ALLOW_ALL_ORIGINS=true"
       - "--quiet"
 
 images:

@@ -5,7 +5,7 @@ import {
   signOut,
   GoogleAuthProvider,
 } from 'firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { Platform } from 'react-native';
 import { auth } from './firebase';
 
 export async function signUpWithEmail(email: string, password: string) {
@@ -23,9 +23,12 @@ export async function signInWithGoogleIdToken(idToken: string) {
 
 export async function signOutUser() {
   await signOut(auth);
-  try {
-    await GoogleSignin.signOut();
-  } catch {}
+  if (Platform.OS !== 'web') {
+    try {
+      const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+      await GoogleSignin.signOut();
+    } catch {}
+  }
 }
 
 export async function getCurrentUserIdToken(): Promise<string | null> {

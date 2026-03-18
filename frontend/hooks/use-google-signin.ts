@@ -1,9 +1,7 @@
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { Platform } from 'react-native';
 import { signInWithGoogleIdToken } from '../src/services/authService';
 
 const WEB_CLIENT_ID = '42277767816-nc1e856fmk9fbddqm3f0lp96q6bv0776.apps.googleusercontent.com';
-
-GoogleSignin.configure({ webClientId: WEB_CLIENT_ID });
 
 type Options = {
   onSuccess?: () => void;
@@ -12,7 +10,15 @@ type Options = {
 
 export function useGoogleSignIn(options?: Options) {
   const signInWithGoogle = async () => {
+    if (Platform.OS === 'web') {
+      options?.onError?.('웹 데모에서는 이메일 로그인 또는 회원가입을 사용해 주세요.');
+      return;
+    }
+
     try {
+      const { GoogleSignin, statusCodes } = await import('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({ webClientId: WEB_CLIENT_ID });
+
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
       const idToken = userInfo.data?.idToken;
@@ -21,8 +27,8 @@ export function useGoogleSignIn(options?: Options) {
       options?.onSuccess?.();
     } catch (error: any) {
       if (
-        error.code === statusCodes.SIGN_IN_CANCELLED ||
-        error.code === statusCodes.IN_PROGRESS
+        error.code === 'SIGN_IN_CANCELLED' ||
+        error.code === 'IN_PROGRESS'
       ) {
         return;
       }

@@ -1,0 +1,14 @@
+{
+  "hosting": {
+    "public": "frontend/dist",
+    "cleanUrls": true,
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "predeploy": [
+      "npm --prefix frontend run export:web"
+    ]
+  }
+}

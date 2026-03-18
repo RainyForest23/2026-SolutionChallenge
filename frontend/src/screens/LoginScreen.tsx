@@ -108,20 +108,28 @@ export default function LoginScreen({ onLoginSuccess, onPressSignUp }: Props) {
                 )}
               </TouchableOpacity>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>또는</Text>
-                <View style={styles.dividerLine} />
-              </View>
+              {Platform.OS !== 'web' ? (
+                <>
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>또는</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
 
-              <TouchableOpacity
-                style={styles.googleButton}
-                onPress={signInWithGoogle}
-                activeOpacity={0.85}
-              >
-                <GoogleLogo width={width * 0.05} height={width * 0.05} style={styles.googleLogo} />
-                <Text style={styles.googleButtonText}>Google로 로그인</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.googleButton}
+                    onPress={signInWithGoogle}
+                    activeOpacity={0.85}
+                  >
+                    <GoogleLogo width={width * 0.05} height={width * 0.05} style={styles.googleLogo} />
+                    <Text style={styles.googleButtonText}>Google로 로그인</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Text style={styles.webHint}>
+                  웹 데모에서는 이메일 로그인 또는 회원가입을 사용해 주세요.
+                </Text>
+              )}
             </View>
 
             <View style={styles.signupRow}>
@@ -242,6 +250,13 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: width * 0.032,
     marginHorizontal: 10,
+  },
+  webHint: {
+    marginTop: height * 0.018,
+    textAlign: 'center',
+    color: '#777',
+    fontSize: width * 0.028,
+    lineHeight: width * 0.04,
   },
   googleButton: {
     width: '100%',

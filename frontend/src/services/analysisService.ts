@@ -1,7 +1,9 @@
 import { getCurrentUserIdToken } from './authService';
 import { EmotionTimeline } from '../domain/emotionTypes';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? '';
+const BASE_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL ??
+  'https://soundsight-42277767816.us-central1.run.app';
 
 export type JobStatus = 'queued' | 'downloading' | 'uploading' | 'processing' | 'done' | 'failed';
 
