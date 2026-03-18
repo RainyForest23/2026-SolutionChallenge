@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Emotion Timeline Schema",
+  "description": "JSON schema for the emotion recognition timeline output over a video/audio track.",
+  "type": "object",
+  "required": [
+    "video_id",
+    "total_duration_sec",
+    "timeline"
+  ],
+  "properties": {
+    "video_id": {
+      "type": "string",
+      "description": "Unique identifier for the video being analyzed."
+    },
+    "total_duration_sec": {
+      "type": "number",
+      "description": "Total duration of the analyzed media in seconds."
+    },
+    "timeline": {
+      "type": "array",
+      "description": "Array of emotion segments across the timeline.",
+      "items": {
+        "type": "object",
+        "required": [
+          "start_time_sec",
+          "end_time_sec",
+          "emotion",
+          "intensity"
+        ],
+        "properties": {
+          "start_time_sec": {
+            "type": "number",
+            "description": "Start time of the segment in seconds."
+          },
+          "end_time_sec": {
+            "type": "number",
+            "description": "End time of the segment in seconds."
+          },
+          "emotion": {
+            "type": "string",
+            "enum": [
+              "Joy",
+              "Sadness",
+              "Anger",
+              "Fear",
+              "Surprise",
+              "Disgust",
+              "Anticipation",
+              "Trust",
+              "Neutral"
+            ],
+            "description": "The primary emotion detected in this segment."
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "The intensity of the emotion, normalized between 0.0 and 1.0."
+          },
+          "shift": {
+            "type": "string",
+            "enum": [
+              "Sudden",
+              "Gradual",
+              "None"
+            ],
+            "description": "Indicates the nature of the emotional transition into this segment, if applicable."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence score of the associated emotion prediction."
+          }
+        }
+      }
+    }
+  }
+}
