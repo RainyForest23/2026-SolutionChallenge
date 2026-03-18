@@ -5,11 +5,17 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# System dependencies (optional but safe)
+# System dependencies and JS runtime needed for full YouTube support in yt-dlp
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     ffmpeg \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+ENV DENO_INSTALL=/opt/deno
+RUN curl -fsSL https://deno.land/install.sh | sh -s -- -q \
+    && ln -s /opt/deno/bin/deno /usr/local/bin/deno
 
 # Install Python dependencies
 COPY backend/requirements.txt /app/requirements.txt
