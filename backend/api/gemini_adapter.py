@@ -13,9 +13,6 @@ MODEL_ID = os.getenv("VERTEX_MODEL_ID", "gemini-2.5-flash")
 
 
 def init_vertex_ai() -> genai.Client:
-    if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-        raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS is not set")
-
     try:
         client = genai.Client(
             vertexai=True,
