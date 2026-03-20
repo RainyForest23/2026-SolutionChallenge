@@ -36,6 +36,9 @@ RUN pip install --upgrade pip \
 COPY backend /app
 COPY ai-pipeline /app/ai-pipeline
 
+# Pre-compile numba/librosa JIT to avoid cold-start memory spike at runtime
+RUN python -c "import sys; sys.path.insert(0, '/app/ai-pipeline'); import numpy as np; import librosa; y = np.zeros(22050, dtype=np.float32); librosa.feature.rms(y=y); print('numba warmup done')"
+
 # entrypoint script will migrate & collectstatic
 COPY backend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
@@ -45,4 +48,4 @@ EXPOSE 8080
 
 ENTRYPOINT ["/entrypoint.sh"]
 # default command; override in docker‑compose.override.yml or via `docker run`
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8080", "--workers", "2"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "600"]
