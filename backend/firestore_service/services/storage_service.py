@@ -85,6 +85,20 @@ class StorageService:
 
         return storage_path
 
+    def download_file(self, storage_path: str, local_path: str) -> str:
+        """Firebase Storage에서 로컬로 파일 다운로드. local_path 반환."""
+        try:
+            blob = self._get_bucket().blob(storage_path)
+            if not blob.exists():
+                raise StorageReadError(f"Storage file not found: {storage_path}")
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            blob.download_to_filename(local_path)
+            return local_path
+        except StorageReadError:
+            raise
+        except Exception as exc:
+            raise StorageReadError(f"Failed to download from storage: {storage_path}") from exc
+
     def read_json(self, storage_path: str) -> Dict[str, Any]:
         if not storage_path:
             raise BadRequestError("storage_path is required")

@@ -32,6 +32,28 @@ try:
 except Exception:
     analyze_video_task = None
 
+# ---------------------------------------------------------------------------
+# 데모용 URL 매핑 (YouTube bot 차단 우회용 임시 처리)
+# ---------------------------------------------------------------------------
+DEMO_UID = "bPeecEgbt7R2S95wo8yhZhOyTGz1"
+DEMO_YOUTUBE_MAP = {
+    "gIHjXDxghqE": "LmZB58uBRpm6WalM0nNz",  # 인터스텔라
+    "0iIgjQfSqS4": "MdPp5xetLVGWC9sOd5df",   # 헤어질결심
+    "6TH1u3n1UY4": "KWG4tYGYgR8ZSnT5HC6K",  # 리틀포레스트
+}
+
+def _get_job_with_demo_fallback(uid: str, job_id: str) -> tuple:
+    """job을 uid 네임스페이스에서 먼저 찾고, 없으면 DEMO_UID에서 찾는다.
+    Returns (job, effective_uid)"""
+    try:
+        return get_job_service().get_job(uid, job_id), uid
+    except JobNotFoundError:
+        pass
+    try:
+        return get_job_service().get_job(DEMO_UID, job_id), DEMO_UID
+    except JobNotFoundError:
+        raise
+
 
 def get_user_service():
     return UserService(UserRepository())
@@ -93,6 +115,59 @@ def analyze(request):
     title = data.get("title") or "Untitled Video"
 
     try:
+        # 데모 URL 체크: Firebase Storage 영상으로 실제 Gemini 분석 실행 (YouTube 차단 우회)
+        if youtube_url:
+            try:
+                yt_vid_id = VideoService(VideoRepository()).extract_youtube_video_id(youtube_url)
+                demo_video_id = DEMO_YOUTUBE_MAP.get(yt_vid_id)
+                if demo_video_id:
+                    # 이미 완료된 결과 있으면 캐시 반환
+                    demo_job = get_job_service().get_latest_job_by_video(DEMO_UID, demo_video_id)
+                    if demo_job and demo_job.get("status") == "done":
+                        resp_data = AnalyzeResponseSerializer(
+                            {"job_id": demo_job["jobId"], "video_id": demo_video_id, "status": "done"}
+                        ).data
+                        return Response(resp_data, status=drf_status.HTTP_202_ACCEPTED)
+
+                    # 이미 진행 중이면 해당 job 반환
+                    active_demo_job = get_job_service().get_active_job_by_video(DEMO_UID, demo_video_id)
+                    if active_demo_job:
+                        resp_data = AnalyzeResponseSerializer(
+                            {"job_id": active_demo_job["jobId"], "video_id": demo_video_id, "status": active_demo_job.get("status")}
+                        ).data
+                        return Response(resp_data, status=drf_status.HTTP_202_ACCEPTED)
+
+                    # Firestore에 video 문서 없으면 생성 (특정 ID로)
+                    from firestore_service.firestore_client import get_firestore_client
+                    from google.cloud import firestore as _fs
+                    db = get_firestore_client()
+                    video_ref = db.document(f"users/{DEMO_UID}/videos/{demo_video_id}")
+                    if not video_ref.get().exists:
+                        video_ref.set({
+                            "uid": DEMO_UID,
+                            "sourceType": "storage",
+                            "currentStatus": "queued",
+                            "createdAt": _fs.SERVER_TIMESTAMP,
+                            "updatedAt": _fs.SERVER_TIMESTAMP,
+                        })
+
+                    # Firebase Storage 영상으로 실제 Gemini 분석 트리거
+                    demo_job_id = uuid.uuid4().hex
+                    get_job_service().create_job(uid=DEMO_UID, job_id=demo_job_id, video_id=demo_video_id, status="queued")
+                    if analyze_video_task:
+                        analyze_video_task.delay(
+                            uid=DEMO_UID,
+                            job_id=demo_job_id,
+                            video_id=demo_video_id,
+                            upload_id=demo_video_id,
+                        )
+                    resp_data = AnalyzeResponseSerializer(
+                        {"job_id": demo_job_id, "video_id": demo_video_id, "status": "queued"}
+                    ).data
+                    return Response(resp_data, status=drf_status.HTTP_202_ACCEPTED)
+            except Exception:
+                pass  # 데모 체크 실패 시 정상 YouTube 흐름으로 진행
+
         # current architecture is video-first, then job
         if youtube_url:
             existing_video = get_video_service().get_video_by_youtube_url(uid, youtube_url)
@@ -109,6 +184,14 @@ def analyze(request):
                         status=drf_status.HTTP_409_CONFLICT,
                     )
 
+                # 이미 완료된 결과가 있으면 재분석 없이 바로 반환
+                latest_job = get_job_service().get_latest_job_by_video(uid, video_id)
+                if latest_job and latest_job.get("status") == "done":
+                    resp_data = AnalyzeResponseSerializer(
+                        {"job_id": latest_job["jobId"], "video_id": video_id, "status": "done"}
+                    ).data
+                    return Response(resp_data, status=drf_status.HTTP_202_ACCEPTED)
+
                 # if latest_job is failed or done, allow new job creation
                 # if latest_job is None, also allow
             else:
@@ -120,11 +203,27 @@ def analyze(request):
                 )
                 video_id = video["videoId"]
         else:
-            # upload_id flow is not fully designed in current service layer yet
-            return Response(
-                {"detail": "upload_id flow is not implemented yet in current service layer."},
-                status=drf_status.HTTP_501_NOT_IMPLEMENTED,
-            )
+            # upload_id = Firebase Storage에 업로드된 video_id
+            if not upload_id:
+                return Response(
+                    {"detail": "youtube_url 또는 upload_id가 필요합니다."},
+                    status=drf_status.HTTP_400_BAD_REQUEST,
+                )
+            video_id = upload_id
+
+            # video 존재 확인
+            try:
+                get_video_service().get_video_with_status(uid, video_id)
+            except VideoNotFoundError:
+                return Response({"detail": "Video not found"}, status=drf_status.HTTP_404_NOT_FOUND)
+
+            # 이미 완료된 결과가 있으면 바로 반환
+            latest_job = get_job_service().get_latest_job_by_video(uid, video_id)
+            if latest_job and latest_job.get("status") == "done":
+                resp_data = AnalyzeResponseSerializer(
+                    {"job_id": latest_job["jobId"], "video_id": video_id, "status": "done"}
+                ).data
+                return Response(resp_data, status=drf_status.HTTP_202_ACCEPTED)
 
         job_id = uuid.uuid4().hex
         get_job_service().create_job(uid=uid, job_id=job_id, video_id=video_id, status="queued")
@@ -179,7 +278,7 @@ def status(request):
         )
 
     try:
-        job = get_job_service().get_job(uid, job_id)
+        job, _ = _get_job_with_demo_fallback(uid, job_id)
 
         resp_data = StatusResponseSerializer(
             {
@@ -276,7 +375,7 @@ def result(request):
         )
 
     try:
-        job = get_job_service().get_job(uid, job_id)
+        job, effective_uid = _get_job_with_demo_fallback(uid, job_id)
         status_val = job.get("status")
         video_id = job.get("videoId")
 
@@ -291,7 +390,7 @@ def result(request):
                 status=drf_status.HTTP_202_ACCEPTED,
             )
 
-        latest_result = get_result_service().get_latest_result(uid, video_id)
+        latest_result = get_result_service().get_latest_result(effective_uid, video_id)
         if not latest_result:
             raise Http404("Analysis result not found")
 

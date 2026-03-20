@@ -23,10 +23,15 @@ async function authHeaders(): Promise<HeadersInit> {
 }
 
 export async function requestAnalysis(videoUrl: string): Promise<{ job_id: string; video_id: string }> {
+  const isYouTubeUrl = videoUrl.startsWith('http') || videoUrl.includes('youtube') || videoUrl.includes('youtu.be');
+  const body = isYouTubeUrl
+    ? { youtube_url: videoUrl }
+    : { upload_id: videoUrl };
+
   const res = await fetch(`${BASE_URL}/api/analyze`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ youtube_url: videoUrl }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

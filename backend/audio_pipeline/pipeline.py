@@ -72,6 +72,47 @@ def run_audio_pipeline(
     }
 
 
+def run_audio_pipeline_from_file(
+    *,
+    audio_file_path: str | Path,
+    workdir: str | Path,
+    job_id: str,
+    segment_sec: int = 10,
+    sample_rate: int = 16000,
+    channels: int = 1,
+) -> Dict[str, Any]:
+    """
+    YouTube 다운로드 없이 로컬 파일(mp4/m4a/wav 등)에서 직접 파이프라인 실행.
+    Firebase Storage에서 다운로드한 파일 처리용.
+    """
+    base_dir = ensure_dir(Path(workdir) / job_id)
+    audio_path = Path(audio_file_path)
+
+    wav_path = convert_to_wav(
+        input_audio_path=audio_path,
+        output_wav_path=base_dir / "audio.wav",
+        sample_rate=sample_rate,
+        channels=channels,
+    )
+
+    segments_dir = ensure_dir(base_dir / "segments")
+    seg_paths = split_wav_segments(
+        input_wav_path=wav_path,
+        segments_dir=segments_dir,
+        segment_sec=segment_sec,
+    )
+
+    duration = get_duration_seconds(audio_path) or get_duration_seconds(wav_path)
+
+    return {
+        "audio_path": str(audio_path),
+        "wav_path": str(wav_path),
+        "segments_dir": str(segments_dir),
+        "segment_paths": [str(p) for p in seg_paths],
+        "duration_sec": duration,
+    }
+
+
 # CLI로도 실행할 수 있도록 하는 main 함수
 
 # Docker Compose에서 실행하는 예시:

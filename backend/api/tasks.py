@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from celery import shared_task
-from audio_pipeline.pipeline import run_audio_pipeline
+from audio_pipeline.pipeline import run_audio_pipeline, run_audio_pipeline_from_file
 
 from firestore_service.repositories.video_repo import VideoRepository
 from firestore_service.repositories.job_repo import JobRepository
@@ -147,20 +147,33 @@ def analyze_video_task(
     callback_url: str = None,
 ):
     try:
-        if not youtube_url:
-            raise ValueError("youtube_url is required for current pipeline")
+        if not youtube_url and not upload_id:
+            raise ValueError("youtube_url or upload_id is required")
 
         # 1) queued -> downloading
         job_service.update_status(uid, job_id, "downloading")
         logger.info("Job %s: downloading stage started", job_id)
 
-        # Real audio pipeline connection
-        pipeline_output = run_audio_pipeline(
-            youtube_url=youtube_url,
-            workdir="/tmp/soundsight",
-            job_id=job_id,
-            segment_sec=10,
-        )
+        if upload_id:
+            # Firebase Storage에서 다운로드 후 파이프라인 실행
+            from firestore_service.storage_paths import video_object_path
+            storage_path = video_object_path(uid, upload_id)
+            local_video_path = f"/tmp/soundsight/{job_id}/source.mp4"
+            storage_service.download_file(storage_path, local_video_path)
+            pipeline_output = run_audio_pipeline_from_file(
+                audio_file_path=local_video_path,
+                workdir="/tmp/soundsight",
+                job_id=job_id,
+                segment_sec=10,
+            )
+        else:
+            # YouTube URL에서 다운로드
+            pipeline_output = run_audio_pipeline(
+                youtube_url=youtube_url,
+                workdir="/tmp/soundsight",
+                job_id=job_id,
+                segment_sec=10,
+            )
 
         logger.info("Job %s: audio pipeline finished: %s", job_id, pipeline_output)
 
