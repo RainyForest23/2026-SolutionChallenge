@@ -160,6 +160,7 @@ def analyze(request):
                             job_id=demo_job_id,
                             video_id=demo_video_id,
                             upload_id=demo_video_id,
+                            youtube_url=youtube_url,
                         )
                     resp_data = AnalyzeResponseSerializer(
                         {"job_id": demo_job_id, "video_id": demo_video_id, "status": "queued"}
