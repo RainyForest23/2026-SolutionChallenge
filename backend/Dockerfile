@@ -17,6 +17,12 @@ ENV DENO_INSTALL=/opt/deno
 RUN curl -fsSL https://deno.land/install.sh | sh -s -- -q \
     && ln -s /opt/deno/bin/deno /usr/local/bin/deno
 
+# Install bgutil PO token provider server (for yt-dlp YouTube bot bypass)
+RUN git clone --single-branch --branch 1.3.1 \
+    https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil-server \
+    && cd /opt/bgutil-server/server \
+    && deno install --allow-scripts=npm:canvas
+
 # Install Python dependencies
 COPY backend/requirements.txt /app/requirements.txt
 COPY ai-pipeline/requirements.txt /app/ai-requirements.txt
