@@ -166,6 +166,8 @@ def analyze_video_task(
                 job_id=job_id,
                 segment_sec=10,
             )
+            # Storage mp4 URL → react-native-video에서 직접 재생 가능
+            youtube_url = storage_service.get_public_url(storage_path)
         else:
             # YouTube URL에서 다운로드
             pipeline_output = run_audio_pipeline(

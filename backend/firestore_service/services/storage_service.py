@@ -99,6 +99,13 @@ class StorageService:
         except Exception as exc:
             raise StorageReadError(f"Failed to download from storage: {storage_path}") from exc
 
+    def get_public_url(self, storage_path: str) -> str:
+        """Firebase Storage 공개 다운로드 URL 반환."""
+        import urllib.parse
+        bucket = self._get_bucket()
+        encoded_path = urllib.parse.quote(storage_path, safe='')
+        return f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{encoded_path}?alt=media"
+
     def read_json(self, storage_path: str) -> Dict[str, Any]:
         if not storage_path:
             raise BadRequestError("storage_path is required")

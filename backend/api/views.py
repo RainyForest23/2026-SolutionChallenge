@@ -403,7 +403,15 @@ def result(request):
             raise Http404("Result path not found")
         
         # 결과 json 파일
-        result_body = get_storage_service().read_json(result_path)
+        try:
+            result_body = get_storage_service().read_json(result_path)
+        except StorageReadError:
+            # Storage 파일이 삭제된 경우 → 해당 job을 failed로 처리하고 재분석 유도
+            try:
+                get_job_service().fail_job(effective_uid, job_id, "result file missing from storage")
+            except Exception:
+                pass
+            raise Http404("Result file not found in storage")
         result_body = _normalize_result_body(result_body)
 
         resp_data = ResultResponseSerializer(
